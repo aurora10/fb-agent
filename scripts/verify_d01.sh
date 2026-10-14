@@ -10,10 +10,8 @@ if [ ! -x "$V" ]; then
   exit 1
 fi
 
-echo "-- scripts compile"
-"$V" -m py_compile \
-  "$ROOT/scripts/fb_plan.py" "$ROOT/scripts/fb_images.py" "$ROOT/scripts/fb_preview.py" \
-  "$ROOT/scripts/fb_export_csv.py" "$ROOT/scripts/fb_api.py" "$ROOT/scripts/import_past_posts.py"
+echo "-- scripts compile (every .py in scripts/, so new files can't be forgotten)"
+"$V" -m py_compile "$ROOT"/scripts/*.py
 
 echo "-- scaffold mirroring a FRESH CLONE"
 T="$(mktemp -d)"
@@ -42,18 +40,60 @@ echo "-- approve creates approved/ when it does not exist (fresh-clone case)"
 (cd "$T" && ./approve 1) | grep -q "approved post_01"
 [ -f "$T/approved/post_01.json" ] || { echo "   !! post_01.json was not created"; exit 1; }
 
-echo "-- schedule guard: refuses a window beyond 30 days"
+echo "-- schedule guard: refuses a window beyond 29 days (the measured limit)"
 # Capture first, then grep: with `set -o pipefail` a non-zero producer fails the pipeline
 # even when grep matches, which would silently turn this assertion into a no-op.
 out="$(cd "$T" && "$V" scripts/fb_api.py schedule --dry-run --start 2030-01-01 2>&1 || true)"
-if grep -q "30-day" <<<"$out"; then
-  echo "   ok: refused"
+if grep -q "29-day" <<<"$out" && grep -q "post(s) fit" <<<"$out"; then
+  echo "   ok: refused, and reported how many fit"
 else
-  echo "   !! 30-day guard did not fire; got:"; echo "$out" | sed 's/^/      /'; exit 1
+  echo "   !! 29-day guard did not fire correctly; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
 echo "-- fb_plan --help works without a key"
 (cd "$T" && env -u OPENAI_API_KEY "$V" scripts/fb_plan.py --help) | grep -q "Usage"
+
+echo "-- fb_content_plan: clear error when there are no seeds and no seeds.txt"
+rm -f "$T/data/seeds.txt"
+out="$(cd "$T" && "$V" scripts/fb_content_plan.py 2>&1 || true)"
+if grep -q "no seeds given" <<<"$out"; then
+  echo "   ok: explained instead of a traceback"
+else
+  echo "   !! expected a clear no-seeds error; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+(cd "$T" && "$V" scripts/fb_content_plan.py --help) | grep -q "Usage"
+
+echo "-- fb_regen_image: creates images/ in a fresh clone (offline, network stubbed)"
+printf '{"post":"t","image_prompt":"orig","topic":"t","status":"draft"}\n' > "$T/drafts/draft_01.json"
+out="$("$V" -c "
+import importlib.util, sys, urllib.request
+from pathlib import Path
+T = Path('$T')
+class R:
+    def read(self): return b'\xff\xd8\xff' + b'0' * 2000
+urllib.request.urlopen = lambda req, timeout=0: R()      # keep this offline
+spec = importlib.util.spec_from_file_location('r', str(T / 'scripts' / 'fb_regen_image.py'))
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.main(['01', 'stub test'])
+print('IMAGES_DIR=' + str((T / 'images').is_dir()))
+print('IMAGE_FILE=' + str((T / 'images' / '01.png').is_file()))
+" 2>&1)"
+if grep -q "IMAGES_DIR=True" <<<"$out" && grep -q "IMAGE_FILE=True" <<<"$out"; then
+  echo "   ok: images/ created and image written"
+else
+  echo "   !! regen did not create images/; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- fb_regen_image: prompt args join with spaces, not concatenated"
+(cd "$T" && "$V" scripts/fb_regen_image.py 01 gevel renovatie --edit-only) >/dev/null
+if "$V" -c "
+import json,sys
+sys.exit(0 if json.load(open('$T/drafts/draft_01.json'))['image_prompt']=='gevel renovatie' else 1)
+"; then
+  echo "   ok: 'gevel renovatie' preserved"
+else
+  echo "   !! multi-arg prompt was mangled"; exit 1
+fi
 
 echo "-- no stale absolute paths"
 # --exclude self: this check's own pattern would otherwise match itself.

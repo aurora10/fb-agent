@@ -23,7 +23,12 @@ BASE = Path(__file__).parent.parent
 ENV_PATH = BASE / ".env"
 LEDGER = BASE / "done" / "scheduled_posts.json"   # local record of posts we scheduled
 API = "https://graph.facebook.com/v26.0"  # pinned: v18/v19/v20 are already dead
-MAX_DAYS_AHEAD = 30                       # docs also claim 75; 30 is the safe bound
+
+# Measured against the live Page on 2026-10-14: +29.00d is accepted, +29.01d is rejected
+# with "(#100) The specified scheduled publish time is invalid". The limit is exactly 29
+# days from the moment of the request. Meta's docs claim 30 days (Pages API guide) and
+# 75 days (Page Feed reference) — both are wrong in practice.
+MAX_DAYS_AHEAD = 29
 
 
 def die(msg):
@@ -363,8 +368,12 @@ def cmd_schedule(argv):
         ts = local_ts(d, at)
         days_out = (ts - int(datetime.now().timestamp())) / 86400
         if days_out > MAX_DAYS_AHEAD:
-            die(f"{f.name} would be {days_out:.0f} days out, over the {MAX_DAYS_AHEAD}-day API "
-                f"limit — pick a later --start or re-run sooner")
+            fits = max(0, int((MAX_DAYS_AHEAD * 86400 - (local_ts(start, at) - int(datetime.now().timestamp())))
+                              / (every * 86400)) + 1)
+            die(f"{f.name} would land {days_out:.1f} days out, past Meta's {MAX_DAYS_AHEAD}-day "
+                f"limit (enforced, not the 30 the docs claim).\n"
+                f"       Only {fits} post(s) fit from --start {start} at --every {every} "
+                f"(--at {at}). Use a later start, or schedule this batch in two runs.")
         data = json.loads(f.read_text())
         num = f.stem.split("_")[1]
         img = BASE / "images" / f"{num}.png"

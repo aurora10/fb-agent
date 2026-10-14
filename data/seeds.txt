@@ -1,0 +1,10 @@
+# Seed themes for fb_content_plan.py (one per line; # starts a comment).
+# Run `.venv/bin/python scripts/fb_content_plan.py` with no arguments to use these.
+gevelrenovatie
+personeelstekort in de bouw
+A1 en Limosa documenten
+deadlines en werkvoorraad
+dakrenovatie
+betonbouw
+screening van onderaannemers
+betaling op resultaat

@@ -258,27 +258,35 @@ publish as **Reels**. This applies to every tool, including Business Suite, so i
 constraint rather than something your integration can avoid. Text + image posts (this
 pipeline's output) are unaffected.
 
-### Scheduling window
+### Scheduling window — measured, not documented
 
-Meta's docs contradict themselves on this — three pages, three numbers, all live today:
+Meta's docs contradict themselves, so this was **measured against a live Page on 2026-10-14**:
 
-| Source | Stated window |
+| `scheduled_publish_time` | Result |
 | --- | --- |
-| [Pages API – Posts](https://developers.facebook.com/docs/pages-api/posts) (Updated Apr 17, 2026) | "between 10 minutes and **30 days**" |
-| [Page Feed reference](https://developers.facebook.com/docs/graph-api/reference/page/feed) | "between 10 minutes and **75 days**" |
-| [Page Videos reference](https://developers.facebook.com/docs/graph-api/reference/page/videos) | "**between 10 mins and 6 months**" |
+| now + 28.75d … +29.00d | **accepted** |
+| now + 29.01d | **rejected** — `(#100) The specified scheduled publish time is invalid` |
+| now + 30d, 45d, 60d, 75d, 90d, 180d | rejected |
 
-**Stay within 30 days.** That's the number on the actively-maintained guide; the 75-day and
-6-month figures live on reference pages that appear to be stale legacy text. Treating
-anything beyond 30 days as unsupported is the safe read.
+**The real limit is exactly 29 days from the moment of the request.** The documented figures
+are all wrong for current practice:
 
-**Note this is probably *not* a regression vs. Meta Business Suite.** Third-party sources put
-MBS's own scheduling window at roughly **20 minutes to 29 days**, i.e. about the same. So the
-API is not costing you scheduling horizon — don't treat that as a reason to stay manual.
-(Unverified against Meta docs; the sources are vendor blogs with an incentive to understate
-MBS.)
+| Source | Stated window | Verdict |
+| --- | --- | --- |
+| [Pages API – Posts](https://developers.facebook.com/docs/pages-api/posts) (Updated Apr 17, 2026) | "between 10 minutes and **30 days**" | ❌ 30d rejected |
+| [Page Feed reference](https://developers.facebook.com/docs/graph-api/reference/page/feed) | "between 10 minutes and **75 days**" | ❌ stale |
+| [Page Videos reference](https://developers.facebook.com/docs/graph-api/reference/page/videos) | "between 10 mins and **6 months**" | untested |
 
-Given this pipeline posts every 2 days, cap a run at ~14 posts and re-run monthly.
+**Because the limit is a rolling 29 days from when you *run* the command, but posts land at a
+fixed clock time, the batch size depends on the gap between those two hours.** Posting at
+19:05 and starting tomorrow: 14 posts fit; the 15th would land 29.2 days out. Start today, or
+post at 10:00, and the 15th fits. `fb_api.py` refuses over-limit batches and reports how many
+posts actually fit.
+
+**The lower bound is a real 10 minutes**, so a post can't go out instantly by scheduling —
+use `published=true` for that.
+
+### Alternative worth considering: schedule app-side, not API-side
 
 ### Alternative worth considering: schedule app-side, not API-side
 
@@ -334,7 +342,7 @@ creating a new app from scratch.
 - [ ] Token exchanged to long-lived, stored in `.env`; `Expires` reads `Never` in the
       [Access Token Debugger](https://developers.facebook.com/tools/debug/accesstoken/)
 - [ ] API version pinned explicitly (`v26.0` in the URL path — never rely on the default)
-- [ ] Schedule ≤ 30 days out
+- [ ] Schedule ≤ 29 days out (the real limit; docs claim 30 and 75)
 - [ ] Don't let the app go **90 days idle** — an Inactive app has "all access tokens
       associated with the app … invalidated", and permissions removed for disuse must go
       back through App Review. This pipeline's 2-day cadence is fine; a dormant quarter is not

@@ -77,73 +77,86 @@ If it does, setup is done for good — the token does not expire.
 
 This is the routine. About 15 minutes, and it produces ~2 weeks of scheduled posts.
 
-## Step 1 — Decide your topics
+The order matters: **review the posts and their image prompts before generating any
+images.** Prompts are shown in the gallery even for drafts that have no image yet, so
+fixing a prompt costs seconds instead of a regeneration.
 
-Either pass them inline:
+## Step 1 — Build the topic plan
+
+Let the agent propose the topics:
 
 ```bash
-.venv/bin/python scripts/fb_plan.py "testweek voor aannemers" "A1/Limosa documenten"
+.venv/bin/python scripts/fb_content_plan.py "gevelrenovatie" "personeelstekort" "testweek"
+# or run with no arguments to use the seeds in data/seeds.txt
+.venv/bin/python scripts/fb_content_plan.py
 ```
 
-…or edit `data/topics.txt` (one topic per line) and run it with no arguments:
+Generates ~10 intent-focused topics per seed — problem-aware (deadline risk, A1/Limosa
+fines, subs no-show), solution-aware (testweek, screening, pay-on-result), proof, and
+trade-specific (gevel/renovatie/dak/beton). Appends to `data/topics.txt`.
+
+Re-running is safe but not idempotent. The model rewords rather than repeats, so the script
+runs a second pass that compares its output against what's already queued and drops the
+near-duplicates (typically 6 of 10 when you reuse a seed). A few reworded angles still get
+through — **always skim `data/topics.txt` and delete what you don't want.** One topic per
+line; this file is the queue everything downstream reads.
+
+Topics work best when they name a **specific contractor problem**:
+
+- ❌ *"Onze diensten"* — nobody searches for this
+- ✅ *"A1- en Limosa-documenten: zo vermijdt u boetes op de werf"*
+
+## Step 2 — Write the posts and image prompts
 
 ```bash
 .venv/bin/python scripts/fb_plan.py
 ```
 
-Topics work best when they name a **specific contractor problem**. Compare:
+Reads `data/topics.txt` (or takes topics inline: `fb_plan.py "topic one" "topic two"`).
+Writes `drafts/draft_NN.json`, each with a `post` and an `image_prompt`. Your positioning
+is injected into every prompt from `data/context.txt`, and `data/past_posts.txt` keeps it
+from repeating old angles.
 
-- ❌ *"Onze diensten"* — nobody searches for this
-- ✅ *"A1- en Limosa-documenten: zo vermijdt u boetes op de werf"*
-
-Your positioning is injected into every prompt from `data/context.txt` — edit that file as
-your offer evolves, and every future post follows it.
-
-Output: `drafts/draft_NN.json`, each with a `post` and an `image_prompt`.
-The planner also reads `data/past_posts.txt` and avoids repeating old angles.
-
-### Step 0 (optional) — have the agent propose the topic plan
-
-```bash
-.venv/bin/python scripts/fb_content_plan.py "gevelrenovatie" "personeelstekort" "testweek"
-```
-
-Generates ~10 intent-focused topics per seed: problem-aware (deadline risk, A1/Limosa
-fines, subs no-show), solution-aware (testweek, screening, pay-on-result), proof, and
-trade-specific (gevel/renovatie/dak/beton). Appends to `data/topics.txt`, deduped
-against both that file and `data/past_posts.txt` — delete lines you don't like before
-running `fb_plan.py`.
-
-## Step 2 — Generate the images
-
-```bash
-.venv/bin/python scripts/fb_images.py
-```
-
-Creates `images/NN.png` to match each draft. Rate-limited to about one per minute with
-retries built in, so expect it to take a few minutes. It won't overwrite existing files.
-
-## Step 3 — Review everything in one screen
+## Step 3 — Review, and fix the image prompts
 
 ```bash
 .venv/bin/python scripts/fb_preview.py
 open previews/index.html
 ```
 
-A gallery of every draft: text, image, topic, and the **image_prompt** (collapsed,
-click ▸ to expand) side by side. This is where you decide what actually goes out.
+A gallery of every draft: text, topic, and the **image_prompt** (collapsed — click ▸ to
+expand). No images exist yet, which is the point: this is where you judge the prompts.
 
-Don't like an image? Regenerate just that one with a better prompt:
+To reword one without generating anything yet:
 
 ```bash
-.venv/bin/python scripts/fb_regen_image.py 03 "fresh prompt text"
-# or rerun with the stored prompt after editing draft_03.json by hand:
-.venv/bin/python scripts/fb_regen_image.py 03
+.venv/bin/python scripts/fb_regen_image.py 03 "photorealistic brick facade renovation in Flanders, no text, no logos"
 ```
 
-Then rerun `fb_preview.py` to see the result.
+`--edit-only` only updates `draft_03.json`. Without it, the same command also generates the
+image, so you can go straight from "this prompt is wrong" to seeing the result.
 
-## Step 4 — Approve what you want published
+## Step 4 — Generate the images
+
+```bash
+.venv/bin/python scripts/fb_images.py
+```
+
+Fills in `images/NN.png` for every draft that doesn't have one. Rate-limited to about one
+per minute with retries built in, so expect a few minutes. It never overwrites, so prompts
+you already regenerated in Step 3 are left alone.
+
+Redo a single image at any time, with a new prompt or the stored one:
+
+```bash
+.venv/bin/python scripts/fb_regen_image.py 03
+.venv/bin/python scripts/fb_regen_image.py 03 "different angle, wider shot"
+```
+
+Then rerun `fb_preview.py` to see the result. The previous version is kept as
+`images/03.old.png`.
+
+## Step 5 — Approve what you want published
 
 ```bash
 ./approve 1 3 4        # approve drafts 1, 3 and 4
@@ -151,7 +164,7 @@ Then rerun `fb_preview.py` to see the result.
 
 Moves those to `approved/`. Anything you skip stays in `drafts/` and is never published.
 
-## Step 5 — Preview the schedule (nothing is sent)
+## Step 6 — Preview the schedule (nothing is sent)
 
 ```bash
 .venv/bin/python scripts/fb_api.py schedule --dry-run --start 2026-11-01
@@ -169,7 +182,7 @@ Prints exactly what would be scheduled and when:
 
 Needs no token, touches nothing. Always look before you send.
 
-## Step 6 — Schedule them for real
+## Step 7 — Schedule them for real
 
 ```bash
 .venv/bin/python scripts/fb_api.py schedule --start 2026-11-01
@@ -180,13 +193,16 @@ moves from `approved/` to `done/` so it can't be scheduled twice.
 
 Two rules the script enforces:
 
-- **Keep within 30 days.** That is Meta's real limit, so at 2-day spacing a run schedules
-  ~14 posts. The script refuses anything further out rather than failing silently at
-  Meta's end.
+- **Keep within 29 days.** Measured against this Page: **+29.00 days is accepted, +29.01 is
+  rejected** with `(#100) The specified scheduled publish time is invalid`. Meta's docs claim
+  30 days (Pages API guide) and 75 days (Page Feed reference) — both wrong in practice. At
+  2-day spacing that means **14 posts per run** starting tomorrow at 19:05 — 15 if you start
+  today, or 15 if you post at 10:00. The script refuses anything past the limit and tells you
+  how many actually fit, so you can split a batch rather than lose it mid-run.
 - **Times use your machine's timezone**, so the local clock stays at 19:05 across daylight
   saving changes.
 
-## Step 7 — Confirm what's queued
+## Step 8 — Confirm what's queued
 
 ```bash
 .venv/bin/python scripts/fb_api.py list
@@ -229,11 +245,12 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | `fb_plan.py TOPIC...` | generate drafts (+ `--models`) |
 | `fb_content_plan.py SEED...` | LLM-proposed topic list → `data/topics.txt` |
 | `fb_images.py` | generate images |
-| `fb_regen_image.py NN ["new prompt"]` | redo one image |
+| `fb_regen_image.py NN ["new prompt"] [--edit-only]` | reword a prompt and/or redo one image |
 | `fb_preview.py` | build the review gallery (shows image_prompt per draft) |
 | `./approve NN...` | move drafts to `approved/` |
 | `fb_export_csv.py` | fallback: Business Suite bulk-upload CSV |
 | `import_past_posts.py` | seed `data/past_posts.txt` to avoid repeating topics |
+| `fb_llm.py` | shared OpenAI helpers — model default, JSON parsing, key guard. Imported by the two planning scripts; not run directly |
 
 ## Files
 
@@ -242,7 +259,7 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | `data/context.txt` | your positioning, injected into every prompt |
 | `data/topics.txt` | topic queue (one per line) — fed by you or `fb_content_plan.py` |
 | `data/past_posts.txt` | previously published posts, used to avoid repeats |
-| `data/seeds.txt` | optional seed themes for `fb_content_plan.py` |
+| `data/seeds.txt` | seed themes for `fb_content_plan.py` (one per line, `#` comments) |
 | `drafts/` → `approved/` → `done/` | post lifecycle |
 | `done/scheduled_posts.json` | local ledger of scheduled post ids |
 | `.env` | keys and tokens (gitignored, chmod 600) |

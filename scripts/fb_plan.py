@@ -5,57 +5,14 @@ Usage: fb_plan.py TOPIC [TOPIC ...]   or reads data/topics.txt (one per line)
        fb_plan.py --models            list chat models your OpenAI key can use
 Writes drafts/draft_NN.json
 """
-import json, os, re, sys
+import json, sys
 from pathlib import Path
-from dotenv import load_dotenv
-from openai import OpenAI, BadRequestError
 
-BASE = Path(__file__).parent.parent
-ENV_PATH = BASE / ".env"
-DEFAULT_MODEL = "gpt-5.4-mini"        # override with OPENAI_MODEL in .env
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fb_llm import BASE, ask, client, data_file, show_models
 
-# Keys come from the .env beside the repo.
-load_dotenv(ENV_PATH)
-
-CTX = (BASE / "data/context.txt").read_text() if (BASE / "data/context.txt").exists() else ""
-PAST = (BASE / "data/past_posts.txt").read_text() if (BASE / "data/past_posts.txt").exists() else ""
-
-
-def client():
-    if not os.environ.get("OPENAI_API_KEY"):
-        sys.exit(f"error: OPENAI_API_KEY is not set — add it to {ENV_PATH}\n"
-                 f"       (see .env.example; get a key at https://platform.openai.com/api-keys)")
-    return OpenAI(timeout=120)
-
-
-def model():
-    return os.environ.get("OPENAI_MODEL") or DEFAULT_MODEL
-
-
-def parse_json(content):
-    """Models sometimes wrap JSON in ``` fences or add prose."""
-    content = (content or "").strip()
-    if content.startswith("```"):
-        content = re.sub(r"^```[a-zA-Z]*\s*", "", content)
-        content = re.sub(r"\s*```$", "", content).strip()
-    try:
-        return json.loads(content)
-    except ValueError:
-        m = re.search(r"\{.*\}", content, re.S)
-        if not m:
-            raise SystemExit(f"error: model did not return JSON:\n{content[:400]}")
-        return json.loads(m.group(0))
-
-
-def ask(cl, system, user):
-    msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
-    try:
-        r = cl.chat.completions.create(model=model(), messages=msgs,
-                                       response_format={"type": "json_object"})
-    except BadRequestError:
-        # Not every model supports JSON mode; retry and parse leniently instead.
-        r = cl.chat.completions.create(model=model(), messages=msgs)
-    return parse_json(r.choices[0].message.content)
+CTX = data_file("context.txt")
+PAST = data_file("past_posts.txt")
 
 
 def plan(topics):
@@ -80,24 +37,13 @@ def plan(topics):
             "(bouwwerf, team aan het werk, geen logos/tekst in beeld, geen gezichten frontaal).\n\n"
             "JSON antwoord: {\"post\": \"...\", \"image_prompt\": \"...\"}"
         ))
+        if "post" not in data:
+            sys.exit(f"error: model returned no 'post' key for topic {topic!r}")
         data["topic"] = topic
         data["status"] = "draft"
         out = BASE / "drafts" / f"draft_{i:02d}.json"
         out.write_text(json.dumps(data, ensure_ascii=False, indent=2))
         print(f"[ok] {out.name}: {topic}")
-
-
-def show_models():
-    cl = client()
-    names = sorted(m.id for m in cl.models.list().data
-                   if m.id.startswith(("gpt-", "o")) and not any(
-                       k in m.id for k in ("audio", "image", "realtime", "transcribe",
-                                           "tts", "codex", "search", "moderation", "live")))
-    print(f"chat models available to this key (current default: {model()}):\n")
-    for n in names:
-        print(f"  {n}")
-    print(f"\nChange it in .env with:  OPENAI_MODEL=<one of the above>\n"
-          f"For this task a 'mini' tier is usually the right tradeoff.")
 
 
 if __name__ == "__main__":
