@@ -19,12 +19,31 @@ TOPICS = BASE / "data" / "topics.txt"
 BATCH_HINT = 14     # what one 29-day scheduling window holds at 2-day spacing
 
 
+def existing_numbers():
+    """Draft numbers already in use across drafts/, approved/ and done/."""
+    nums = []
+    for pat in ("draft_*.json", "post_*.json"):
+        for folder in ("drafts", "approved", "done"):
+            for p in (BASE / folder).glob(pat):
+                stem = p.stem.split("_")[-1]
+                if stem.isdigit():
+                    nums.append(int(stem))
+    return nums
+
+
+def next_number():
+    """max+1, NOT count+1.
+
+    Counting breaks as soon as you delete a duplicate: 16 drafts minus 3 pruned gives a
+    count that points back into the surviving range, so the next batch would silently
+    overwrite draft_15, draft_16, draft_17.
+    """
+    return max(existing_numbers(), default=0) + 1
+
+
 def plan(topics):
     cl = client()
     (BASE / "drafts").mkdir(parents=True, exist_ok=True)
-    n_existing = (len(list((BASE / "drafts").glob("draft_*.json")))
-                  + len(list((BASE / "approved").glob("post_*.json")))
-                  + len(list((BASE / "done").glob("post_*.json"))))
     system = (
         "Je schrijft Facebook-posts voor Constructief (constructief-bouw.be), "
         "een Belgische tussenpersoon die voor gecontroleerde Oost-Europese bouwteams legt voor aannemers. "
@@ -33,7 +52,12 @@ def plan(topics):
         f"Context: {CTX[:2000]}\n\n"
         + history_block()
     )
-    for i, topic in enumerate(topics, start=n_existing + 1):
+    for i, topic in enumerate(topics, start=next_number()):
+        out = BASE / "drafts" / f"draft_{i:02d}.json"
+        if out.exists():
+            sys.exit(f"error: {out.name} already exists — refusing to overwrite it.\n"
+                     f"       this should not happen with max+1 numbering; check drafts/ "
+                     f"for a numbering clash")
         data = ask(cl, system, (
             f"Schrijf een Facebook-post over dit onderwerp: {topic}\n\n"
             "Geef OOK een image_prompt in het Engels voor een foto-realistische illustratie "
@@ -44,7 +68,6 @@ def plan(topics):
             sys.exit(f"error: model returned no 'post' key for topic {topic!r}")
         data["topic"] = topic
         data["status"] = "draft"
-        out = BASE / "drafts" / f"draft_{i:02d}.json"
         out.write_text(json.dumps(data, ensure_ascii=False, indent=2))
         print(f"[ok] {out.name}: {topic}")
 

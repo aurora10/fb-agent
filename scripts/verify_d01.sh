@@ -137,6 +137,46 @@ else
   echo "   !! draft selection leaks; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
+echo "-- fb_plan: numbers new drafts from max+1, so pruning cannot cause an overwrite"
+rm -f "$T"/drafts/draft_*.json
+printf 'x\n' > "$T/drafts/draft_04.json"
+printf 'x\n' > "$T/drafts/draft_07.json"
+out="$(cd "$T" && "$V" - <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+import fb_plan
+print("NEXT=" + str(fb_plan.next_number()))
+PY
+)"
+if grep -q "NEXT=8" <<<"$out"; then
+  echo "   ok: gaps skipped (04,07 -> next 08)"
+else
+  echo "   !! numbering would collide; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- fb_regen_image: --revert restores the previous prompt (offline)"
+printf '{"post":"t","image_prompt":"ORIGINAL PROMPT","topic":"t","status":"draft"}\n' > "$T/drafts/draft_01.json"
+(cd "$T" && "$V" scripts/fb_regen_image.py 01 "typo oops" --edit-only) >/dev/null
+(cd "$T" && "$V" scripts/fb_regen_image.py 01 --revert) >/dev/null
+if "$V" -c "
+import json, sys
+d = json.load(open('$T/drafts/draft_01.json'))
+sys.exit(0 if d['image_prompt'] == 'ORIGINAL PROMPT' else 1)
+"; then
+  echo "   ok: back to the original after a typo"
+else
+  echo "   !! --revert did not restore the prompt"; exit 1
+fi
+
+echo "-- fb_regen_image: --revert without a stored prompt fails clearly"
+printf '{"post":"t","image_prompt":"p","topic":"t","status":"draft"}\n' > "$T/drafts/draft_02.json"
+out="$(cd "$T" && "$V" scripts/fb_regen_image.py 02 --revert 2>&1 || true)"
+if grep -q "nothing to restore" <<<"$out"; then
+  echo "   ok: explained"
+else
+  echo "   !! unclear error; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- history block: every published post contributes an angle hook"
 # Own fixture: data/past_posts.txt is gitignored, so a fresh clone has none.
 printf 'Fixture post one about gevelrenovatie.\nFixture post two about dakwerken.\nFixture post three about betonbouw.\n' > "$T/data/past_posts.txt"

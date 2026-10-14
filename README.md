@@ -207,10 +207,13 @@ Redo a single image at any time, with a new prompt or the stored one:
 ```bash
 .venv/bin/python scripts/fb_regen_image.py 03
 .venv/bin/python scripts/fb_regen_image.py 03 "different angle, wider shot"
+.venv/bin/python scripts/fb_regen_image.py 03 --revert     # undo a bad prompt
 ```
 
-Then rerun `fb_preview.py` to see the result. The previous version is kept as
-`images/03.old.png`.
+Then rerun `fb_preview.py` to see the result. The previous image is kept as
+`images/03.old.png`, and the previous *prompt* is kept in the JSON as `image_prompt_prev` —
+so `--revert` swaps the two back (run it again to swap forward). Useful because a typo in
+a prompt is otherwise unrecoverable.
 
 ## Step 5 — Approve what you want published
 
@@ -284,6 +287,19 @@ visible to you but not to anyone else, the app is not published — see Part 1 S
 
 Cancelling works until a post goes live. Once published, delete it in Meta Business Suite.
 
+**Pruning a draft you don't want** (duplicate angle, weak text) is just deleting it, plus its
+image so you don't leave an orphan:
+
+```bash
+rm drafts/draft_03.json images/03.png
+```
+
+Numbering gaps are fine. New drafts are numbered from **max+1**, not from a count, precisely
+so that deleting drafts cannot make the next batch reuse a number that is still in use —
+with count-based numbering, pruning 3 of 16 drafts made the next batch start at `draft_15`
+and silently overwrite `draft_15`, `draft_16` and `draft_17`. `fb_plan.py` also refuses to
+write over an existing draft rather than trusting the arithmetic.
+
 ---
 
 # Reference
@@ -302,7 +318,7 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | `fb_plan.py [TOPIC...] [--limit N]` | generate drafts; `--limit N` takes the next N from the queue |
 | `fb_content_plan.py SEED...` | LLM-proposed topic list → `data/topics.txt` |
 | `fb_images.py [NN...]` | generate images (all drafts, or just the numbers given) |
-| `fb_regen_image.py NN ["new prompt"] [--edit-only]` | reword a prompt and/or redo one image |
+| `fb_regen_image.py NN ["prompt"] [--edit-only\|--revert]` | reword a prompt, redo one image, or undo |
 | `fb_preview.py` | build the review gallery (shows image_prompt per draft) |
 | `./approve NN...` | move drafts to `approved/` |
 | `fb_export_csv.py` | fallback: Business Suite bulk-upload CSV |
