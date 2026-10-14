@@ -1,17 +1,22 @@
 #!/usr/bin/env python3
 """Generate FB post drafts (text + image prompt) from topics.
 
-Usage: fb_plan.py TOPIC [TOPIC ...]   or reads data/topics.txt (one per line)
-       fb_plan.py --models            list chat models your OpenAI key can use
+Usage: fb_plan.py TOPIC [TOPIC ...]        generate for topics given inline
+       fb_plan.py                          take everything queued in data/topics.txt
+       fb_plan.py --limit N                take the next N from the queue (they are
+                                           removed from it once drafted)
+       fb_plan.py --models                 list chat models your OpenAI key can use
 Writes drafts/draft_NN.json
 """
-import json, sys
+import json, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fb_llm import BASE, ask, client, data_file, history_block, show_models
 
 CTX = data_file("context.txt")
+TOPICS = BASE / "data" / "topics.txt"
+BATCH_HINT = 14     # what one 29-day scheduling window holds at 2-day spacing
 
 
 def plan(topics):
@@ -44,20 +49,57 @@ def plan(topics):
         print(f"[ok] {out.name}: {topic}")
 
 
+def queued_topics():
+    if not TOPICS.exists():
+        sys.exit(f"error: {TOPICS} does not exist\n"
+                 f"       pass topics as arguments, or run fb_content_plan.py first")
+    return [l.strip() for l in TOPICS.read_text().splitlines() if l.strip()]
+
+
 if __name__ == "__main__":
     args = sys.argv[1:]
+
+    limit = None
+    if "--limit" in args:
+        i = args.index("--limit")
+        try:
+            limit = int(args[i + 1])
+        except (IndexError, ValueError):
+            sys.exit("error: --limit needs a number, e.g. --limit 14")
+        if limit < 1:
+            sys.exit("error: --limit must be at least 1")
+        del args[i:i + 2]
+
     if args and args[0] in ("-h", "--help"):
         print(__doc__)
     elif args and args[0] == "--models":
         show_models()
+    elif args:
+        plan(args)                    # topics inline: the queue is left untouched
     else:
-        topics = args
-        if not topics:
-            tf = BASE / "data/topics.txt"
-            if not tf.exists():
-                sys.exit(f"error: no topics given and {tf} does not exist — "
-                         f"pass topics as arguments or create that file (one per line)")
-            topics = [l.strip() for l in tf.read_text().splitlines() if l.strip()]
-        if not topics:
-            sys.exit("error: no topics to plan")
-        plan(topics)
+        queued = queued_topics()
+        if not queued:
+            sys.exit("error: data/topics.txt is empty — run fb_content_plan.py first")
+
+        if limit and limit < len(queued):
+            print(f"[..] queue holds {len(queued)}; taking the first {limit}, "
+                  f"leaving {len(queued) - limit} for later batches")
+        elif not limit and len(queued) > BATCH_HINT:
+            # One scheduling window is ~14 posts, so generating a 90-topic backlog in one
+            # go means 90 drafts, 90 rate-limited images and an unusable review gallery.
+            print(f"[!!] {len(queued)} topics queued, but one scheduling window holds about "
+                  f"{BATCH_HINT}.\n"
+                  f"     That would create {len(queued)} drafts and as many images.\n"
+                  f"     Re-run as:  fb_plan.py --limit {BATCH_HINT}\n"
+                  f"     Continuing with all of them in 8s — Ctrl-C to stop.")
+            time.sleep(8)
+
+        taken = queued[:limit] if limit else queued
+        plan(taken)
+
+        # Only shrink the queue after drafting succeeded; a crash mid-run must not lose topics.
+        TOPICS.write_text("".join(t + "\n" for t in queued[len(taken):]))
+        remaining = len(queued) - len(taken)
+        print(f"[ok] data/topics.txt: {remaining} topic(s) left in the queue")
+        if remaining:
+            print(f"     next batch: fb_plan.py --limit {min(BATCH_HINT, remaining)}")

@@ -95,6 +95,25 @@ else
   echo "   !! multi-arg prompt was mangled"; exit 1
 fi
 
+echo "-- fb_plan: a failed run must not consume the topic queue"
+printf 'Topic one\nTopic two\nTopic three\n' > "$T/data/topics.txt"
+before="$(grep -c . "$T/data/topics.txt")"
+(cd "$T" && "$V" scripts/fb_plan.py --limit 1) >/dev/null 2>&1 || true
+after="$(grep -c . "$T/data/topics.txt")"
+if [ "$before" = "$after" ]; then
+  echo "   ok: $after topics still queued after the failure"
+else
+  echo "   !! queue went from $before to $after topics on a failed run"; exit 1
+fi
+
+echo "-- fb_plan: --limit validates its argument"
+out="$(cd "$T" && "$V" scripts/fb_plan.py --limit abc 2>&1 || true)"
+if grep -q "needs a number" <<<"$out"; then
+  echo "   ok: rejected a non-numeric limit"
+else
+  echo "   !! --limit accepted junk; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- history block: every published post contributes an angle hook"
 # Own fixture: data/past_posts.txt is gitignored, so a fresh clone has none.
 printf 'Fixture post one about gevelrenovatie.\nFixture post two about dakwerken.\nFixture post three about betonbouw.\n' > "$T/data/past_posts.txt"

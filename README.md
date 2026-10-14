@@ -142,14 +142,32 @@ Topics work best when they name a **specific contractor problem**:
 
 ## Step 2 — Write the posts and image prompts
 
+Work in batches of about **14**, because that is what one scheduling window holds (29 days
+at 2-day spacing). `fb_content_plan.py` happily queue 90 topics, but generating them all at
+once means 90 drafts, 90 rate-limited images and an unusable review gallery:
+
 ```bash
-.venv/bin/python scripts/fb_plan.py
+.venv/bin/python scripts/fb_plan.py --limit 14
 ```
 
-Reads `data/topics.txt` (or takes topics inline: `fb_plan.py "topic one" "topic two"`).
-Writes `drafts/draft_NN.json`, each with a `post` and an `image_prompt`. Your positioning
-is injected into every prompt from `data/context.txt`, and `data/past_posts.txt` keeps it
-from repeating old angles.
+`data/topics.txt` acts as a queue: the topics used are removed once they have been drafted,
+so the next run continues where this one stopped. The queue is only trimmed **after**
+drafting succeeds, so a crash or a Ctrl-C never loses topics. Each run prints what is left
+and suggests the next command.
+
+If you queue more than ~14 and forget `--limit`, it warns and gives you 8 seconds to stop
+before spending anything.
+
+Other forms:
+
+```bash
+.venv/bin/python scripts/fb_plan.py                  # everything queued, no batching
+.venv/bin/python scripts/fb_plan.py "topic one" "topic two"   # inline; queue untouched
+```
+
+Writes `drafts/draft_NN.json`, each with a `post` and an `image_prompt`. Your positioning is
+injected from `data/context.txt`, and the history from Part 1 Step 4 keeps it off angles you
+have already published.
 
 ## Step 3 — Review, and fix the image prompts
 
@@ -277,7 +295,7 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | `fb_api.py past-posts [--limit N]` | sync published posts → `data/past_posts.txt` |
 | `fb_api.py cancel POST_ID` | delete a post |
 | `fb_api.py schedule --start DATE [--every N] [--at HH:MM] [--dry-run]` | schedule `approved/` |
-| `fb_plan.py TOPIC...` | generate drafts (+ `--models`) |
+| `fb_plan.py [TOPIC...] [--limit N]` | generate drafts; `--limit N` takes the next N from the queue |
 | `fb_content_plan.py SEED...` | LLM-proposed topic list → `data/topics.txt` |
 | `fb_images.py` | generate images |
 | `fb_regen_image.py NN ["new prompt"] [--edit-only]` | reword a prompt and/or redo one image |
