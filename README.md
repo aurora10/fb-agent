@@ -102,6 +102,18 @@ your offer evolves, and every future post follows it.
 Output: `drafts/draft_NN.json`, each with a `post` and an `image_prompt`.
 The planner also reads `data/past_posts.txt` and avoids repeating old angles.
 
+### Step 0 (optional) — have the agent propose the topic plan
+
+```bash
+.venv/bin/python scripts/fb_content_plan.py "gevelrenovatie" "personeelstekort" "testweek"
+```
+
+Generates ~10 intent-focused topics per seed: problem-aware (deadline risk, A1/Limosa
+fines, subs no-show), solution-aware (testweek, screening, pay-on-result), proof, and
+trade-specific (gevel/renovatie/dak/beton). Appends to `data/topics.txt`, deduped
+against both that file and `data/past_posts.txt` — delete lines you don't like before
+running `fb_plan.py`.
+
 ## Step 2 — Generate the images
 
 ```bash
@@ -118,8 +130,18 @@ retries built in, so expect it to take a few minutes. It won't overwrite existin
 open previews/index.html
 ```
 
-A gallery of every draft: text, image, and topic side by side. This is where you decide
-what actually goes out.
+A gallery of every draft: text, image, topic, and the **image_prompt** (collapsed,
+click ▸ to expand) side by side. This is where you decide what actually goes out.
+
+Don't like an image? Regenerate just that one with a better prompt:
+
+```bash
+.venv/bin/python scripts/fb_regen_image.py 03 "fresh prompt text"
+# or rerun with the stored prompt after editing draft_03.json by hand:
+.venv/bin/python scripts/fb_regen_image.py 03
+```
+
+Then rerun `fb_preview.py` to see the result.
 
 ## Step 4 — Approve what you want published
 
@@ -205,8 +227,10 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | `fb_api.py cancel POST_ID` | delete a post |
 | `fb_api.py schedule --start DATE [--every N] [--at HH:MM] [--dry-run]` | schedule `approved/` |
 | `fb_plan.py TOPIC...` | generate drafts (+ `--models`) |
+| `fb_content_plan.py SEED...` | LLM-proposed topic list → `data/topics.txt` |
 | `fb_images.py` | generate images |
-| `fb_preview.py` | build the review gallery |
+| `fb_regen_image.py NN ["new prompt"]` | redo one image |
+| `fb_preview.py` | build the review gallery (shows image_prompt per draft) |
 | `./approve NN...` | move drafts to `approved/` |
 | `fb_export_csv.py` | fallback: Business Suite bulk-upload CSV |
 | `import_past_posts.py` | seed `data/past_posts.txt` to avoid repeating topics |
@@ -216,8 +240,9 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | Path | What |
 | --- | --- |
 | `data/context.txt` | your positioning, injected into every prompt |
-| `data/topics.txt` | topic queue (one per line) |
+| `data/topics.txt` | topic queue (one per line) — fed by you or `fb_content_plan.py` |
 | `data/past_posts.txt` | previously published posts, used to avoid repeats |
+| `data/seeds.txt` | optional seed themes for `fb_content_plan.py` |
 | `drafts/` → `approved/` → `done/` | post lifecycle |
 | `done/scheduled_posts.json` | local ledger of scheduled post ids |
 | `.env` | keys and tokens (gitignored, chmod 600) |
