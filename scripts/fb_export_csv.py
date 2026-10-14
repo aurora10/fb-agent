@@ -15,6 +15,7 @@ def main():
     posts = sorted((BASE / "approved").glob("post_*.json"))
     if not posts:
         print("nothing approved"); return
+    (BASE / "done").mkdir(parents=True, exist_ok=True)
     out = BASE / "done" / f"planner_upload_{start.isoformat()}.csv"
     with out.open("w", newline="") as fh:
         w = csv.writer(fh)

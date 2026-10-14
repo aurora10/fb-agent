@@ -6,6 +6,7 @@ from pathlib import Path
 BASE = Path(__file__).parent.parent
 
 def main():
+    (BASE / "images").mkdir(parents=True, exist_ok=True)
     for f in sorted((BASE / "drafts").glob("draft_*.json")):
         d = json.loads(f.read_text())
         num = f.stem.split("_")[1]

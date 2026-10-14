@@ -6,6 +6,7 @@ from pathlib import Path
 BASE = Path(__file__).parent.parent
 
 def main():
+    (BASE / "previews").mkdir(parents=True, exist_ok=True)
     cards = []
     for f in sorted((BASE / "drafts").glob("draft_*.json")):
         d = json.loads(f.read_text())

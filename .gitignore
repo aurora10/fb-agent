@@ -1,7 +1,11 @@
+# local secrets — never commit
+.env
 .venv/
 __pycache__/
-done/*.csv
+
+# generated content + pipeline state
 drafts/
 approved/
 images/
 previews/
+done/
