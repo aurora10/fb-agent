@@ -406,6 +406,7 @@ write over an existing draft rather than trusting the arithmetic.
 | `fb_content_plan.py SEED...` | LLM-proposed topic list → `data/topics.txt` |
 | `fb_images.py [NN...]` | generate images (all drafts, or just the numbers given) |
 | `fb_restyle_prompts.py [NN...]` | rewrite draft prompts to scene-only (drops style wording) |
+| `fb_fix_cta.py [NN...] [--dry-run]` | replace an improvised CTA in existing posts with the pinned one |
 | `fb_imagegen.py` | shared provider layer for image generation — OpenAI GPT Image or Pollinations. Imported by the two scripts above; not run directly |
 | `fb_regen_image.py NN ["prompt"] [--edit-only\|--revert]` | reword a prompt, redo one image, or undo |
 | `fb_preview.py` | build the review gallery (shows image_prompt per draft) |

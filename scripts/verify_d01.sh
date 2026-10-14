@@ -323,6 +323,51 @@ else
   echo "   !! CTA assembly broken; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
+echo "-- fb_fix_cta: swaps an improvised CTA for the pinned one, and is idempotent"
+out="$(cd "$T" && "$V" - <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+from fb_llm import cta
+from fb_fix_cta import fix, split_tags, drop_trailing_cta
+
+pinned = cta()
+old = ("Een verkeerde aanwerving kost meer dan u denkt.\n\n"
+       "Contacteer ons via constructief-bouw.be\n"
+       "#onderaanneming #bouwteam")
+new, body, tags = fix(old)
+assert new is not None
+assert "Contacteer ons via" not in new, "old CTA not removed"
+assert pinned in new, "pinned CTA not applied"
+assert new.rstrip().endswith("#bouwteam"), "hashtags must survive at the end"
+assert "Een verkeerde aanwerving" in new, "body text must survive"
+
+# the old link form must also be replaced, not just the bare domain
+old2 = ("Body sentence here.\n\n👉 https://constructief-bouw.be/nl/werkgevers\n#tag")
+new2, _, _ = fix(old2)
+assert "👉 https://constructief-bouw.be/nl/werkgevers\n" not in new2 or pinned in new2
+assert new2.count("werkgevers") == 1 or "Plaats uw aanvraag" in new2
+
+# running twice must not stack CTAs
+again, _, _ = fix(new)
+assert again is None or again == new, "not idempotent"
+assert (again or new).count("Plaats uw aanvraag") == 1, "CTA duplicated"
+
+# a post that is nothing but a CTA must be refused, not gutted
+bare, _, _ = fix("Contacteer ons via constructief-bouw.be")
+assert bare is None, "must refuse to gut a CTA-only post"
+
+assert split_tags("Body. #een #twee")[1] == "#een #twee"
+assert drop_trailing_cta("Real content. Bel ons") == "Real content."
+assert drop_trailing_cta("Real content.") == "Real content."
+print("FIXCTA=ok")
+PY
+)"
+if grep -q "FIXCTA=ok" <<<"$out"; then
+  echo "   ok: replaces, preserves body+tags, idempotent, refuses CTA-only posts"
+else
+  echo "   !! CTA migration broken; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- history block: every published post contributes an angle hook"
 # Own fixture: data/past_posts.txt is gitignored, so a fresh clone has none.
 printf 'Fixture post one about gevelrenovatie.\nFixture post two about dakwerken.\nFixture post three about betonbouw.\n' > "$T/data/past_posts.txt"
