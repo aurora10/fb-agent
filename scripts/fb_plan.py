@@ -13,6 +13,7 @@ load_dotenv("/opt/data/.env")
 client = OpenAI(base_url="https://api.deepseek.com/v1", api_key=os.environ["DEEPSEEK_API_KEY"], timeout=120)
 
 CTX = (BASE / "data/context.txt").read_text() if (BASE / "data/context.txt").exists() else ""
+PAST = (BASE / "data/past_posts.txt").read_text() if (BASE / "data/past_posts.txt").exists() else ""
 
 def plan(topics):
     n_existing = len(list((BASE / "drafts").glob("draft_*.json"))) + len(list((BASE / "approved").glob("post_*.json"))) + len(list((BASE / "done").glob("post_*.json")))
@@ -24,7 +25,9 @@ def plan(topics):
                     "een Belgische tussenpersoon die voor gecontroleerde Oost-Europese bouwteams legt voor aannemers. "
                     "Toon: professioneel, direct, Vlaams Nederlands. Max 120 woorden. "
                     "Eindig met 1 call-to-action (contact/website) + 3-5 hashtags. "
-                    f"Context: {CTX[:2000]}"
+                    f"Context: {CTX[:2000]}\n"
+                    f"Eerdere posts op de pagina (niet herhalen, ook geen bijna-dubbele invalshoeken):\n"
+                    f"{PAST[:4000] if PAST else '(geen)'}"
                 )},
                 {"role": "user", "content": (
                     f"Schrijf een Facebook-post over dit onderwerp: {topic}\n\n"
