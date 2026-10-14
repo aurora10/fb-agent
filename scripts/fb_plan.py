@@ -60,8 +60,12 @@ def plan(topics):
                      f"for a numbering clash")
         data = ask(cl, system, (
             f"Schrijf een Facebook-post over dit onderwerp: {topic}\n\n"
-            "Geef OOK een image_prompt in het Engels voor een foto-realistische illustratie "
-            "(bouwwerf, team aan het werk, geen logos/tekst in beeld, geen gezichten frontaal).\n\n"
+            "Geef OOK een image_prompt in het Engels, maar beschrijf daarin ALLEEN DE SCENE: "
+            "welke objecten, personen, materialen en handelingen te zien zijn, en de compositie. "
+            "Beschrijf GEEN stijl, belichting, kleuren, camera-standpunt of rendering — de "
+            "visuele stijl komt uit een aparte vaste stijlprompt en mag daar niet mee "
+            "conflicteren. Noem dus niet 'photorealistic', 'cinematic', '3D render' of "
+            "dergelijke. Geen logo's of tekst in beeld, geen frontale gezichten.\n\n"
             "JSON antwoord: {\"post\": \"...\", \"image_prompt\": \"...\"}"
         ))
         if "post" not in data:

@@ -12,12 +12,38 @@ import base64, os, sys, time, urllib.parse, urllib.request
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import client
+from fb_llm import client, data_file
 
 DEFAULT_OPENAI_MODEL = "gpt-image-2"
 VALID_SIZES = ("1024x1024", "1024x1536", "1536x1024")
 VALID_QUALITY = ("low", "medium", "high", "xhigh", "max", "auto")
 POLLINATIONS = "https://image.pollinations.ai/prompt/{}?width=1024&height=1024&nologo=true"
+STYLE_FILE = "image_style.txt"
+
+
+def style():
+    """The house visual style from data/image_style.txt, applied to every image.
+
+    Edit that file to restyle future generations — no code change, and existing drafts
+    keep their scene description untouched.
+    """
+    return data_file(STYLE_FILE).strip()
+
+
+def compose(scene):
+    """Scene first, then the house style.
+
+    Order matters for providers with a prompt limit: Pollinations truncates to 300 chars,
+    so putting the scene first means a long style block degrades to "style lost" rather
+    than "scene lost".
+    """
+    scene = (scene or "").strip()
+    sty = style()
+    if not sty:
+        return scene
+    if not scene:
+        return sty
+    return f"{scene}\n\n{sty}"
 
 
 def provider():
@@ -42,13 +68,15 @@ def image_format():
 
 def describe():
     """One line for the user, so it is obvious what is being spent."""
-    if provider() == "pollinations":
-        return "pollinations (free)"
-    return f"{image_model()} @ {image_size()} quality={image_quality()} ({image_format()})"
+    prov = ("pollinations (free)" if provider() == "pollinations"
+            else f"{image_model()} @ {image_size()} quality={image_quality()} ({image_format()})")
+    sty = style()
+    return prov + (f" + {STYLE_FILE} ({len(sty)} chars)" if sty else " [no style file]")
 
 
 def generate(prompt, log=print):
     """Image bytes, or None. Returns None without retrying when the model refuses."""
+    prompt = compose(prompt)
     if provider() == "pollinations":
         return _pollinations(prompt, log)
     return _openai(prompt, log)

@@ -216,7 +216,7 @@ assert "gpt-image-2" in g.describe()
 
 os.environ["IMAGE_PROVIDER"] = "pollinations"
 assert g.provider() == "pollinations"
-assert g.describe() == "pollinations (free)", g.describe()
+assert g.describe().startswith("pollinations (free)"), g.describe()
 
 os.environ["IMAGE_PROVIDER"] = "openai"
 os.environ["OPENAI_IMAGE_QUALITY"] = "high"
@@ -252,6 +252,38 @@ if grep -q "BYTES=503" <<<"$out"; then
   echo "   ok: free provider still functional"
 else
   echo "   !! pollinations path broke; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- imagegen: house style is loaded and composed after the scene"
+out="$(cd "$T" && "$V" - <<'PY'
+import os, sys
+sys.path.insert(0, "scripts")
+import fb_imagegen as g
+
+sty = g.style()
+assert sty, "data/image_style.txt not loaded"
+assert "ISOMETRIC" in sty.upper(), "style file looks wrong"
+assert "image_style.txt" in g.describe(), g.describe()
+
+scene = "A small crew on scaffolding beside a brick facade."
+full = g.compose(scene)
+# scene first, so a provider that truncates loses style rather than content
+assert full.startswith(scene), "scene must come first"
+assert sty[:60] in full, "style must be appended"
+assert len(full) > len(sty), "composition lost content"
+
+# no style file -> scene passes through untouched
+real = g.data_file
+g.data_file = lambda n: "" if n == g.STYLE_FILE else real(n)
+assert g.compose(scene) == scene, "empty style must not break the prompt"
+g.data_file = real
+print("STYLE=ok")
+PY
+)"
+if grep -q "STYLE=ok" <<<"$out"; then
+  echo "   ok: loaded, appended after the scene, degrades safely"
+else
+  echo "   !! house style wiring broken; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
 echo "-- history block: every published post contributes an angle hook"

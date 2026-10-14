@@ -188,10 +188,39 @@ open previews/index.html
 A gallery of every draft: text, topic, and the **image_prompt** (collapsed — click ▸ to
 expand). No images exist yet, which is the point: this is where you judge the prompts.
 
-To reword one without generating anything yet:
+### Scene vs style — the important split
+
+Drafts describe only the **scene**: objects, people, materials, composition. The **visual
+style** lives in `data/image_style.txt` and is appended to every prompt at generation time.
+Edit that file to restyle everything at once — no code change, and no need to regenerate
+drafts.
+
+```
+<scene from the draft>
+
+VISUAL STYLE — PREMIUM ISOMETRIC 3D EDITORIAL ILLUSTRATION
+...
+```
+
+Scene comes first on purpose: providers with a prompt limit (Pollinations truncates at 300
+characters) lose the style rather than the content.
+
+**This means a draft prompt must not contradict the style.** `fb_plan.py` is instructed to
+write scene-only, but drafts written before `data/image_style.txt` existed say
+"photorealistic, documentary style" — which fights it. Fix existing drafts with:
 
 ```bash
-.venv/bin/python scripts/fb_regen_image.py 03 "photorealistic brick facade renovation in Flanders, no text, no logos"
+.venv/bin/python scripts/fb_restyle_prompts.py            # every draft
+.venv/bin/python scripts/fb_restyle_prompts.py 5 6 11     # or selected ones
+```
+
+It rewrites only `image_prompt` (never the post text) and keeps the old value in
+`image_prompt_prev`, so `fb_regen_image.py NN --revert` undoes it.
+
+To reword one scene by hand without generating anything:
+
+```bash
+.venv/bin/python scripts/fb_regen_image.py 03 "brick facade renovation site in Flanders, scaffolding, no text, no logos" --edit-only
 ```
 
 `--edit-only` only updates `draft_03.json`. Without it, the same command also generates the
@@ -359,6 +388,7 @@ write over an existing draft rather than trusting the arithmetic.
 | `fb_plan.py [TOPIC...] [--limit N]` | generate drafts; `--limit N` takes the next N from the queue |
 | `fb_content_plan.py SEED...` | LLM-proposed topic list → `data/topics.txt` |
 | `fb_images.py [NN...]` | generate images (all drafts, or just the numbers given) |
+| `fb_restyle_prompts.py [NN...]` | rewrite draft prompts to scene-only (drops style wording) |
 | `fb_imagegen.py` | shared provider layer for image generation — OpenAI GPT Image or Pollinations. Imported by the two scripts above; not run directly |
 | `fb_regen_image.py NN ["prompt"] [--edit-only\|--revert]` | reword a prompt, redo one image, or undo |
 | `fb_preview.py` | build the review gallery (shows image_prompt per draft) |
@@ -371,7 +401,8 @@ write over an existing draft rather than trusting the arithmetic.
 
 | Path | What |
 | --- | --- |
-| `data/context.txt` | your positioning, injected into every prompt |
+| `data/context.txt` | your positioning, injected into every post prompt |
+| `data/image_style.txt` | the house visual style, appended to every image prompt |
 | `data/topics.txt` | topic queue (one per line) — fed by you or `fb_content_plan.py` |
 | `data/past_posts.txt` | published history, newest first — synced by `fb_api.py past-posts` (gitignored) |
 | `data/seeds.txt` | seed themes for `fb_content_plan.py` (one per line, `#` comments) |
