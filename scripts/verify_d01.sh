@@ -114,6 +114,29 @@ else
   echo "   !! --limit accepted junk; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
+echo "-- fb_images: renders only the requested drafts (offline, network stubbed)"
+printf '{"post":"t","image_prompt":"p2","topic":"t","status":"draft"}\n' > "$T/drafts/draft_02.json"
+rm -f "$T/images"/*.png
+out="$("$V" - "$T" <<'PY'
+import importlib.util, sys, urllib.request
+from pathlib import Path
+T = Path(sys.argv[1])
+class R:
+    def read(self): return b'\xff\xd8\xff' + b'0' * 2000
+urllib.request.urlopen = lambda req, timeout=0: R()
+spec = importlib.util.spec_from_file_location('i', str(T / 'scripts' / 'fb_images.py'))
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+m.main(['1'])                      # ask for draft 1 only
+print('ONE=' + str((T / 'images' / '01.png').is_file()))
+print('TWO=' + str((T / 'images' / '02.png').is_file()))
+PY
+)"
+if grep -q "ONE=True" <<<"$out" && grep -q "TWO=False" <<<"$out"; then
+  echo "   ok: generated 1, left 2 alone"
+else
+  echo "   !! draft selection leaks; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- history block: every published post contributes an angle hook"
 # Own fixture: data/past_posts.txt is gitignored, so a fresh clone has none.
 printf 'Fixture post one about gevelrenovatie.\nFixture post two about dakwerken.\nFixture post three about betonbouw.\n' > "$T/data/past_posts.txt"

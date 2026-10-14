@@ -190,13 +190,17 @@ image, so you can go straight from "this prompt is wrong" to seeing the result.
 
 ## Step 4 — Generate the images
 
+To try **one** post before committing to the batch — or any subset:
+
 ```bash
-.venv/bin/python scripts/fb_images.py
+.venv/bin/python scripts/fb_images.py 4          # just draft 4
+.venv/bin/python scripts/fb_images.py 4 7 12     # a few
+.venv/bin/python scripts/fb_images.py            # every draft still missing an image
 ```
 
-Fills in `images/NN.png` for every draft that doesn't have one. Rate-limited to about one
-per minute with retries built in, so expect a few minutes. It never overwrites, so prompts
-you already regenerated in Step 3 are left alone.
+Rate-limited to about one per minute with retries built in, so a full 14-draft batch takes
+roughly 15 minutes. It never overwrites, so prompts you already reworded in Step 3 are left
+alone, and an already-generated image makes it a no-op rather than a re-render.
 
 Redo a single image at any time, with a new prompt or the stored one:
 
@@ -297,7 +301,7 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | `fb_api.py schedule --start DATE [--every N] [--at HH:MM] [--dry-run]` | schedule `approved/` |
 | `fb_plan.py [TOPIC...] [--limit N]` | generate drafts; `--limit N` takes the next N from the queue |
 | `fb_content_plan.py SEED...` | LLM-proposed topic list → `data/topics.txt` |
-| `fb_images.py` | generate images |
+| `fb_images.py [NN...]` | generate images (all drafts, or just the numbers given) |
 | `fb_regen_image.py NN ["new prompt"] [--edit-only]` | reword a prompt and/or redo one image |
 | `fb_preview.py` | build the review gallery (shows image_prompt per draft) |
 | `./approve NN...` | move drafts to `approved/` |
