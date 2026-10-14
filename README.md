@@ -71,6 +71,34 @@ When you have `FB_APP_ID` and `FB_APP_SECRET` in `.env`:
 `check` should end in `ok`, with `expires : never` and `CREATE_CONTENT` in the tasks list.
 If it does, setup is done for good — the token does not expire.
 
+## Step 4 — Sync your post history
+
+Without this, the model writes blind: it has no idea what you have already published, so it
+repeats angles you covered months ago.
+
+```bash
+.venv/bin/python scripts/fb_api.py past-posts          # whole history
+.venv/bin/python scripts/fb_api.py past-posts --limit 60
+```
+
+Reads `/{page-id}/posts` and writes `data/past_posts.txt`, newest first. Each run replaces
+the file, so **re-run it before planning a batch** to pick up whatever has published since.
+
+How it reaches the model — two different slices, because voice and dedup need different
+things:
+
+| Purpose | What is sent | Size at 50 posts |
+| --- | --- | --- |
+| Tone and style | the **10 newest** posts in full | ~10k chars |
+| Avoiding repeats | a **90-character hook from every** post | ~4.5k chars |
+
+That covers the whole history for about 4k tokens. The earlier version sent `[:4000]`
+characters, which at 50 posts meant **3 posts and 9% of the history** — the mechanism was
+effectively switched off.
+
+If you would rather import from a spreadsheet, `scripts/import_past_posts.py <export.csv>`
+still works; the API route is just less work.
+
 ---
 
 # Part 2 — Creating and scheduling posts
@@ -83,7 +111,13 @@ fixing a prompt costs seconds instead of a regeneration.
 
 ## Step 1 — Build the topic plan
 
-Let the agent propose the topics:
+First make sure the model knows what you have already published:
+
+```bash
+.venv/bin/python scripts/fb_api.py past-posts
+```
+
+Then let the agent propose the topics:
 
 ```bash
 .venv/bin/python scripts/fb_content_plan.py "gevelrenovatie" "personeelstekort" "testweek"
@@ -240,6 +274,7 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | `fb_api.py token [PAGE_ID]` | mint the non-expiring Page token (re-run to switch Pages) |
 | `fb_api.py test-post [--now]` | create a test post; `--now` publishes immediately |
 | `fb_api.py list` | what's scheduled, plus recent published posts |
+| `fb_api.py past-posts [--limit N]` | sync published posts → `data/past_posts.txt` |
 | `fb_api.py cancel POST_ID` | delete a post |
 | `fb_api.py schedule --start DATE [--every N] [--at HH:MM] [--dry-run]` | schedule `approved/` |
 | `fb_plan.py TOPIC...` | generate drafts (+ `--models`) |
@@ -249,7 +284,7 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | `fb_preview.py` | build the review gallery (shows image_prompt per draft) |
 | `./approve NN...` | move drafts to `approved/` |
 | `fb_export_csv.py` | fallback: Business Suite bulk-upload CSV |
-| `import_past_posts.py` | seed `data/past_posts.txt` to avoid repeating topics |
+| `import_past_posts.py` | fallback: import history from a CSV export instead of the API |
 | `fb_llm.py` | shared OpenAI helpers — model default, JSON parsing, key guard. Imported by the two planning scripts; not run directly |
 
 ## Files
@@ -258,17 +293,19 @@ Cancelling works until a post goes live. Once published, delete it in Meta Busin
 | --- | --- |
 | `data/context.txt` | your positioning, injected into every prompt |
 | `data/topics.txt` | topic queue (one per line) — fed by you or `fb_content_plan.py` |
-| `data/past_posts.txt` | previously published posts, used to avoid repeats |
+| `data/past_posts.txt` | published history, newest first — synced by `fb_api.py past-posts` (gitignored) |
 | `data/seeds.txt` | seed themes for `fb_content_plan.py` (one per line, `#` comments) |
 | `drafts/` → `approved/` → `done/` | post lifecycle |
 | `done/scheduled_posts.json` | local ledger of scheduled post ids |
 | `.env` | keys and tokens (gitignored, chmod 600) |
 
-**Everything generated is gitignored** — `drafts/`, `approved/`, `images/`, `previews/` and
-`done/` are all excluded, so your post copy, published images and tokens stay off GitHub.
-The consequence: **a fresh clone has none of those directories.** Every script creates the
-one it needs, so just run the Part 2 steps in order. Only `data/` and `scripts/` are
-tracked.
+**Everything generated is gitignored** — `drafts/`, `approved/`, `images/`, `previews/`,
+`done/` and `data/past_posts.txt` are all excluded, so your post copy, published history,
+generated images and tokens stay off GitHub.
+
+The consequence: **a fresh clone has none of those directories, and no post history.** Every
+script creates the directory it needs, so just run Part 1 Step 4 and then the Part 2 steps in
+order. Tracked under `data/` are only `context.txt`, `topics.txt` and `seeds.txt`.
 
 ## Gotchas
 

@@ -9,6 +9,7 @@ See docs/meta-api-setup.md for how to obtain those.
                                                  (re-run with a PAGE_ID to switch Pages)
   ./scripts/fb_api.py test-post [--now]            create a scheduled test post
   ./scripts/fb_api.py list                         list scheduled / unpublished posts
+  ./scripts/fb_api.py past-posts [--limit N]       sync published posts -> data/past_posts.txt
   ./scripts/fb_api.py cancel POST_ID               delete a post
   ./scripts/fb_api.py schedule --start DATE [--every N] [--at HH:MM] [--dry-run]
                                                    schedule approved/ posts, then move to done/
@@ -347,6 +348,48 @@ def cmd_cancel(post_id):
     print(f"deleted {post_id}")
 
 
+def cmd_past_posts(argv):
+    """Sync published Page posts into data/past_posts.txt (newest first).
+
+    The old route was a manual Business Suite CSV export piped through
+    import_past_posts.py. We already hold a Page token, so just read /posts.
+    """
+    def opt(name, default=None):
+        return argv[argv.index(name) + 1] if name in argv else default
+
+    tok, pid = env("FB_PAGE_TOKEN"), env("FB_PAGE_ID")
+    want = int(opt("--limit", "0"))          # 0 = the whole history
+
+    rows, after = [], None
+    while True:
+        p = {"fields": "id,message,created_time", "limit": "100", "access_token": tok}
+        if after:
+            p["after"] = after
+        r = graph(f"{pid}/posts", p, soft=True)
+        if r is None:
+            die("could not read /posts — check FB_PAGE_TOKEN with `check`")
+        rows += r.get("data", [])
+        after = ((r.get("paging") or {}).get("cursors") or {}).get("after")
+        if not after or (want and len(rows) >= want):
+            break
+
+    rows = [r for r in rows if (r.get("message") or "").strip()]
+    rows.sort(key=lambda r: r.get("created_time", ""), reverse=True)
+    if want:
+        rows = rows[:want]
+
+    out = BASE / "data" / "past_posts.txt"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    out.write_text("\n".join(r["message"].replace("\n", " ").strip() for r in rows) + "\n")
+
+    print(f"[ok] {out.relative_to(BASE)}: {len(rows)} posts (newest first)")
+    if rows:
+        print(f"     newest {rows[0].get('created_time', '')[:10]} "
+              f"→ oldest {rows[-1].get('created_time', '')[:10]}")
+        print(f"     fb_plan.py sends the {min(10, len(rows))} newest in full, plus a "
+              f"{min(400, len(rows))}-post angle digest")
+
+
 def cmd_schedule(argv):
     def opt(name, default=None):
         return argv[argv.index(name) + 1] if name in argv else default
@@ -419,5 +462,7 @@ if __name__ == "__main__":
         cmd_cancel(rest[0] if rest else die("usage: cancel POST_ID"))
     elif cmd == "schedule":
         cmd_schedule(rest)
+    elif cmd == "past-posts":
+        cmd_past_posts(rest)
     else:
         die(f"unknown command {cmd!r} — try --help")

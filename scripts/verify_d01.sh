@@ -95,6 +95,43 @@ else
   echo "   !! multi-arg prompt was mangled"; exit 1
 fi
 
+echo "-- history block: every published post contributes an angle hook"
+# Own fixture: data/past_posts.txt is gitignored, so a fresh clone has none.
+printf 'Fixture post one about gevelrenovatie.\nFixture post two about dakwerken.\nFixture post three about betonbouw.\n' > "$T/data/past_posts.txt"
+out="$(cd "$T" && "$V" - <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+from fb_llm import history_block, past_posts
+n = len(past_posts())
+assert n == 3, f"expected the 3 fixture posts, got {n}"
+b = history_block()
+hooks = b.count("\n- ")
+assert hooks >= n, f"only {hooks} hook lines for {n} posts"
+print(f"HOOKS_OK {n}")
+PY
+)"
+if grep -q "HOOKS_OK 3" <<<"$out"; then
+  echo "   ok: all 3 fixture posts contributed"
+else
+  echo "   !! history block lost posts; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- history block: says what to run when there is no history yet"
+mv "$T/data/past_posts.txt" "$T/data/past_posts.bak"
+out="$(cd "$T" && "$V" - <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+from fb_llm import history_block
+print(history_block())
+PY
+)"
+mv "$T/data/past_posts.bak" "$T/data/past_posts.txt"
+if grep -q "past-posts" <<<"$out"; then
+  echo "   ok: points at fb_api.py past-posts"
+else
+  echo "   !! no guidance when history is missing; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- no stale absolute paths"
 # --exclude self: this check's own pattern would otherwise match itself.
 # --exclude-dir __pycache__: stale bytecode can hold strings the source no longer has.

@@ -9,11 +9,10 @@ import re, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import BASE, ask, client, data_file
+from fb_llm import BASE, ask, client, data_file, history_block
 
 PER_SEED = 10
 CTX = data_file("context.txt")
-PAST = data_file("past_posts.txt")
 
 
 def norm(t):
@@ -43,9 +42,8 @@ def main(args):
     queued = [l.strip() for l in tf.read_text().splitlines() if l.strip()] if tf.exists() else []
 
     cl = client()
-    # Tell the model what is already queued. Filtering the results afterwards is not enough:
-    # exact-match dedup cannot catch a reworded duplicate, which is what the model produces
-    # when re-run on the same seed.
+    # history_block() carries the published history AND the queued topics, so the model
+    # knows what to avoid rather than relying on post-hoc filtering.
     system = (
         f"Je bent contentstrateeg voor Constructief (constructief-bouw.be). "
         f"Maak {PER_SEED} Facebook-post-onderwerpen over het seed-thema voor aannemers in BE/NL. "
@@ -53,10 +51,7 @@ def main(args):
         "oplossing-bewust (testweek, screening, betaling op resultaat), bewijs, trade-specifiek (gevel/renovatie/dak/beton). "
         "Max 15 woorden per onderwerp. Nederlandstalig.\n\n"
         f"Context: {CTX[:1500]}\n\n"
-        "Deze onderwerpen zijn AL gepland of al gepubliceerd. Herhaal ze niet en vermijd "
-        "onderwerpen die er inhoudelijk op lijken, ook als de woorden anders zijn:\n"
-        f"{chr(10).join(queued[-150:]) if queued else '(nog niets gepland)'}\n"
-        f"{PAST[:2500] if PAST else ''}"
+        + history_block(also_avoid=queued)
     )
 
     proposed = []

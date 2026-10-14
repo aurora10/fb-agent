@@ -9,10 +9,9 @@ import json, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import BASE, ask, client, data_file, show_models
+from fb_llm import BASE, ask, client, data_file, history_block, show_models
 
 CTX = data_file("context.txt")
-PAST = data_file("past_posts.txt")
 
 
 def plan(topics):
@@ -26,9 +25,8 @@ def plan(topics):
         "een Belgische tussenpersoon die voor gecontroleerde Oost-Europese bouwteams legt voor aannemers. "
         "Toon: professioneel, direct, Vlaams Nederlands. Max 120 woorden. "
         "Eindig met 1 call-to-action (contact/website) + 3-5 hashtags. "
-        f"Context: {CTX[:2000]}\n"
-        f"Eerdere posts op de pagina (niet herhalen, ook geen bijna-dubbele invalshoeken):\n"
-        f"{PAST[:4000] if PAST else '(geen)'}"
+        f"Context: {CTX[:2000]}\n\n"
+        + history_block()
     )
     for i, topic in enumerate(topics, start=n_existing + 1):
         data = ask(cl, system, (

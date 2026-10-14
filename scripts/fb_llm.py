@@ -73,3 +73,48 @@ def show_models():
         print(f"  {n}")
     print("\nChange it in .env with:  OPENAI_MODEL=<one of the above>\n"
           "For this task a 'mini' tier is usually the right tradeoff.")
+
+
+# --------------------------------------------------------------- post history
+# Voice and dedup want different amounts of history, so they get different slices.
+# A handful of full posts is enough to match the tone; avoiding a repeated angle needs
+# every angle, but only the hook of each — full bodies would not fit and are not needed.
+
+VOICE_POSTS = 10        # recent posts sent in full
+HOOK_CHARS = 90         # per-post opener used as the angle digest
+MAX_HOOKS = 400         # bound the prompt if history ever grows large
+
+
+def past_posts():
+    """data/past_posts.txt as a list, newest first (see `fb_api.py past-posts`)."""
+    return [l.strip() for l in data_file("past_posts.txt").splitlines() if l.strip()]
+
+
+def history_block(also_avoid=()):
+    """Prompt text describing what is already published, and what is already queued.
+
+    Replaces the old `PAST[:4000]`, which kept 9% of history — about 3 posts out of 50.
+    """
+    posts = past_posts()
+    parts = []
+
+    if posts:
+        recent = posts[:VOICE_POSTS]
+        parts.append("Recente posts (volledige tekst, om toon en stijl te volgen):\n"
+                     + "\n".join(f"- {t}" for t in recent))
+
+        hooks = posts[:MAX_HOOKS]
+        note = "" if len(posts) <= MAX_HOOKS else f" (oudste {len(posts) - MAX_HOOKS} weggelaten)"
+        parts.append(
+            f"Alle {len(hooks)} eerder gepubliceerde invalshoeken{note} — kom hier niet op "
+            "terug, ook niet met andere woorden:\n"
+            + "\n".join(f"- {t[:HOOK_CHARS].rstrip()}" for t in hooks)
+        )
+    else:
+        parts.append("(nog geen eerdere posts bekend — draai eerst: "
+                     ".venv/bin/python scripts/fb_api.py past-posts)")
+
+    if also_avoid:
+        parts.append("Al gepland maar nog niet gepubliceerd (ook vermijden):\n"
+                     + "\n".join(f"- {t}" for t in also_avoid))
+    return "\n\n".join(parts)
