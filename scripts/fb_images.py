@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
-"""Generate images for drafts via Pollinations (free, no key). -> images/NN.png
+"""Generate images for drafts -> images/NN.png
 
 Usage: fb_images.py            every draft that has no image yet
        fb_images.py 4 7 12     only those draft numbers (handy for a one-post test)
 Existing images are never overwritten (use fb_regen_image.py to redo one).
+
+Provider is IMAGE_PROVIDER in .env: `openai` (default, gpt-image-2) or `pollinations`.
 """
-import json, sys, time, urllib.parse, urllib.request
+import json, sys
 from pathlib import Path
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fb_imagegen import describe, generate
+
 BASE = Path(__file__).parent.parent
-POLLINATIONS = "https://image.pollinations.ai/prompt/{}?width=1024&height=1024&nologo=true"
 
 
 def wanted(argv):
@@ -26,20 +30,13 @@ def wanted(argv):
 
 def render(num, prompt):
     img = BASE / "images" / f"{num}.png"
-    url = POLLINATIONS.format(urllib.parse.quote(prompt[:300]))
-    for attempt in range(3):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "fb-agent/1.0"})
-            data = urllib.request.urlopen(req, timeout=120).read()
-            if data[:8] == b"\x89PNG\r\n\x1a\n" or data[:3] == b"\xff\xd8\xff":
-                img.write_bytes(data)
-                print(f"[ok] {img.name} ({len(data) // 1024} KB)")
-                return True
-        except Exception as e:
-            print(f"[retry {attempt + 1}] {num}: {e}")
-            time.sleep(5)
-    print(f"[FAIL] image {num}")
-    return False
+    data = generate(prompt)
+    if data is None:
+        print(f"[FAIL] image {num}")
+        return False
+    img.write_bytes(data)
+    print(f"[ok] {img.name} ({len(data) // 1024} KB)")
+    return True
 
 
 def main(argv):
@@ -70,7 +67,7 @@ def main(argv):
 
     print(f"generating {len(todo)} image(s)"
           + (f", {skipped} already present" if skipped else "")
-          + " — roughly one per minute")
+          + f" with {describe()}")
     ok = sum(render(num, prompt) for num, prompt in todo)
     print(f"done: {ok}/{len(todo)}")
 

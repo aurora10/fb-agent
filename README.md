@@ -35,18 +35,27 @@ cp .env.example .env
 
 Open `.env` and fill in the OpenAI block:
 
-| Key | Where to get it |
-| --- | --- |
-| `OPENAI_API_KEY` | <https://platform.openai.com/api-keys> |
-| `OPENAI_MODEL` | optional; defaults to `gpt-5.4-mini` |
+| Key | Default | Notes |
+| --- | --- | --- |
+| `OPENAI_API_KEY` | — | <https://platform.openai.com/api-keys> |
+| `OPENAI_MODEL` | `gpt-5.4-mini` | text generation |
+| `IMAGE_PROVIDER` | `openai` | or `pollinations` (free, no key) |
+| `OPENAI_IMAGE_MODEL` | `gpt-image-2` | also `gpt-image-1.5`, `gpt-image-2.5-flare` |
+| `OPENAI_IMAGE_SIZE` | `1024x1024` | or `1024x1536`, `1536x1024` |
+| `OPENAI_IMAGE_QUALITY` | `medium` | **the main cost lever** |
+| `OPENAI_IMAGE_FORMAT` | `jpeg` | or `png`, `webp` |
 
-Not sure which model your key can use?
+Not sure which text model your key can use?
 
 ```bash
 .venv/bin/python scripts/fb_plan.py --models
 ```
 
-Then paste your favourite into `OPENAI_MODEL`. Images use Pollinations (free, no key).
+**Image cost is per image, so test with one before rendering a batch.** Expect roughly
+40–60 seconds per image at `gpt-image-2`/`medium`, so a 13-draft batch is ~10 minutes —
+about the same wall-clock as the free Pollinations provider, but it bills. Drop
+`OPENAI_IMAGE_QUALITY` to `low` if you want it cheaper, or set `IMAGE_PROVIDER=pollinations`
+to go back to free.
 
 ## Step 3 — Connect the Facebook Page
 
@@ -198,9 +207,18 @@ To try **one** post before committing to the batch — or any subset:
 .venv/bin/python scripts/fb_images.py            # every draft still missing an image
 ```
 
-Rate-limited to about one per minute with retries built in, so a full 14-draft batch takes
-roughly 15 minutes. It never overwrites, so prompts you already reworded in Step 3 are left
-alone, and an already-generated image makes it a no-op rather than a re-render.
+It prints which provider and model it is about to use, so you always know what is being
+spent:
+
+```
+generating 1 image(s) with gpt-image-2 @ 1024x1024 quality=medium (jpeg)
+[ok] 04.png (175 KB)
+```
+
+Expect roughly 40–60 seconds per image with `gpt-image-2`, so a full 14-draft batch takes
+about 10 minutes. It never overwrites, so prompts you already reworded in Step 3 are left
+alone, and an already-generated image makes it a no-op rather than a re-render. A prompt the
+image model refuses is reported as `[BLOCKED]` and **not** retried — reword it instead.
 
 Redo a single image at any time, with a new prompt or the stored one:
 
@@ -341,6 +359,7 @@ write over an existing draft rather than trusting the arithmetic.
 | `fb_plan.py [TOPIC...] [--limit N]` | generate drafts; `--limit N` takes the next N from the queue |
 | `fb_content_plan.py SEED...` | LLM-proposed topic list → `data/topics.txt` |
 | `fb_images.py [NN...]` | generate images (all drafts, or just the numbers given) |
+| `fb_imagegen.py` | shared provider layer for image generation — OpenAI GPT Image or Pollinations. Imported by the two scripts above; not run directly |
 | `fb_regen_image.py NN ["prompt"] [--edit-only\|--revert]` | reword a prompt, redo one image, or undo |
 | `fb_preview.py` | build the review gallery (shows image_prompt per draft) |
 | `./approve NN...` | move drafts to `approved/` |
@@ -379,8 +398,14 @@ order. Tracked under `data/` are only `context.txt`, `topics.txt` and `seeds.txt
   `/{page-id}/posts`. Meta's own docs get this wrong.
 - **No API edge lists scheduled posts.** The tooling keeps a local ledger and verifies each
   id against the API, so don't delete `done/scheduled_posts.json`.
-- **`images/NN.png` are actually JPEG data** (Pollinations returns JPEG). Harmless — the
-  uploader sniffs real content instead of trusting the extension.
+- **`images/NN.png` are actually JPEG data** — `OPENAI_IMAGE_FORMAT=jpeg` by default, and
+  Pollinations also returns JPEG. Harmless: the uploader sniffs real content instead of
+  trusting the extension.
+- **Facebook re-encodes your image anyway.** Upload a 1024×1024 file and the feed serves a
+  720×720 version — `fb_api.py preview` shows that stored asset, which is what you should
+  judge from.
+- **Mixing providers is fine.** Old Pollinations images and new GPT Image ones coexist;
+  nothing keys off the provider after the file is written.
 - **Rate limits are a non-issue** at this volume (~4800 × engaged users calls per day).
 
 ## Fallback: manual scheduling

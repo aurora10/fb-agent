@@ -66,8 +66,9 @@ fi
 echo "-- fb_regen_image: creates images/ in a fresh clone (offline, network stubbed)"
 printf '{"post":"t","image_prompt":"orig","topic":"t","status":"draft"}\n' > "$T/drafts/draft_01.json"
 out="$("$V" -c "
-import importlib.util, sys, urllib.request
+import importlib.util, os, sys, urllib.request
 from pathlib import Path
+os.environ['IMAGE_PROVIDER'] = 'pollinations'   # offline: no OpenAI key needed, urlopen stubbed
 T = Path('$T')
 class R:
     def read(self): return b'\xff\xd8\xff' + b'0' * 2000
@@ -118,8 +119,9 @@ echo "-- fb_images: renders only the requested drafts (offline, network stubbed)
 printf '{"post":"t","image_prompt":"p2","topic":"t","status":"draft"}\n' > "$T/drafts/draft_02.json"
 rm -f "$T/images"/*.png
 out="$("$V" - "$T" <<'PY'
-import importlib.util, sys, urllib.request
+import importlib.util, os, sys, urllib.request
 from pathlib import Path
+os.environ["IMAGE_PROVIDER"] = "pollinations"   # offline: no OpenAI key needed
 T = Path(sys.argv[1])
 class R:
     def read(self): return b'\xff\xd8\xff' + b'0' * 2000
@@ -199,6 +201,57 @@ if grep -q "LEFT=none" <<<"$out" && grep -q "SANITISE=ok" <<<"$out"; then
   echo "   ok: placeholders filled, escaping + link styling hold"
 else
   echo "   !! preview template problem; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- imagegen: provider switch and defaults are honoured"
+out="$(cd "$T" && "$V" - <<'PY'
+import os, sys
+sys.path.insert(0, "scripts")
+import fb_imagegen as g
+
+os.environ.pop("IMAGE_PROVIDER", None)
+assert g.provider() == "openai", g.provider()
+assert g.image_model() == "gpt-image-2", g.image_model()
+assert "gpt-image-2" in g.describe()
+
+os.environ["IMAGE_PROVIDER"] = "pollinations"
+assert g.provider() == "pollinations"
+assert g.describe() == "pollinations (free)", g.describe()
+
+os.environ["IMAGE_PROVIDER"] = "openai"
+os.environ["OPENAI_IMAGE_QUALITY"] = "high"
+assert "quality=high" in g.describe()
+
+# pollinations path must still work without any OpenAI key
+os.environ["IMAGE_PROVIDER"] = "pollinations"
+os.environ["OPENAI_API_KEY"] = ""
+print("SWITCH=ok")
+PY
+)"
+if grep -q "SWITCH=ok" <<<"$out"; then
+  echo "   ok: openai by default, pollinations still selectable"
+else
+  echo "   !! provider switch broken; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- imagegen: pollinations path returns bytes (offline, network stubbed)"
+out="$(cd "$T" && "$V" - <<'PY'
+import sys, urllib.request
+sys.path.insert(0, "scripts")
+import fb_imagegen as g
+import os
+os.environ["IMAGE_PROVIDER"] = "pollinations"
+class R:
+    def read(self): return b"\xff\xd8\xff" + b"0" * 500
+urllib.request.urlopen = lambda req, timeout=0: R()
+data = g.generate("test prompt", log=lambda *a: None)
+print("BYTES=" + str(len(data) if data else 0))
+PY
+)"
+if grep -q "BYTES=503" <<<"$out"; then
+  echo "   ok: free provider still functional"
+else
+  echo "   !! pollinations path broke; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
 echo "-- history block: every published post contributes an angle hook"

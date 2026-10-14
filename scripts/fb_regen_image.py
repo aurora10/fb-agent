@@ -11,35 +11,15 @@ NN is the draft number (e.g. 3 or 03).
 The prompt that was replaced is kept in draft_NN.json as `image_prompt_prev`, so a typo
 is reversible — --revert swaps the two and can be run again to swap back.
 """
-import json, sys, time, urllib.parse, urllib.request
+import json, sys
 from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fb_imagegen import describe, generate
 
 BASE = Path(__file__).parent.parent
 IMAGES = BASE / "images"
-POLLINATIONS = "https://image.pollinations.ai/prompt/{}?width=1024&height=1024&nologo=true"
 FLAGS = ("--edit-only", "--revert")
-
-
-def fetch(prompt):
-    """Pollinations → image bytes, or None after real network retries.
-
-    The directory is created by the caller before this runs, so a missing-folder error
-    can no longer masquerade as a flaky image service.
-    """
-    url = POLLINATIONS.format(urllib.parse.quote(prompt[:300]))
-    for attempt in range(3):
-        try:
-            req = urllib.request.Request(url, headers={"User-Agent": "fb-agent/1.0"})
-            data = urllib.request.urlopen(req, timeout=120).read()
-        except Exception as e:                       # network: worth retrying
-            print(f"[retry {attempt + 1}] {e}")
-            time.sleep(8)
-            continue
-        if data[:8] == b"\x89PNG\r\n\x1a\n" or data[:3] == b"\xff\xd8\xff":
-            return data
-        print(f"[retry {attempt + 1}] response was not an image ({len(data)} bytes)")
-        time.sleep(8)
-    return None
 
 
 def main(argv):
@@ -95,10 +75,11 @@ def main(argv):
     IMAGES.mkdir(parents=True, exist_ok=True)
     img = IMAGES / f"{num}.png"
 
-    data = fetch(prompt)
+    print(f"rendering with {describe()}")
+    data = generate(prompt)
     if data is None:
-        sys.exit("[FAIL] could not fetch an image from Pollinations — try again shortly. "
-                 f"draft_{num}.json already holds the new prompt, so re-run with no prompt arg.")
+        sys.exit(f"[FAIL] no image produced. draft_{num}.json already holds the new prompt, "
+                 f"so re-run with no prompt argument to try again.")
 
     # Keep one previous version, not one per attempt.
     if img.exists():
