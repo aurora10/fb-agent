@@ -279,6 +279,28 @@ recent published (times shown in your local timezone):
 Check the Page in a **private window while logged out** at least once. If your posts are
 visible to you but not to anyone else, the app is not published — see Part 1 Step 3.
 
+## Step 9 — See them as Facebook will render them
+
+**Meta Business Suite does not list API-scheduled posts.** They only appear there once they
+publish, and no API edge lists them either — so the ledger and this preview are your queue
+view. Render the real thing from Facebook's own data:
+
+```bash
+.venv/bin/python scripts/fb_api.py preview            # everything in the ledger
+.venv/bin/python scripts/fb_api.py preview 1262992640226921_...   # one post
+open previews/scheduled.html
+```
+
+The image in this preview is Facebook's `full_picture` — **the asset Facebook stored, already
+cropped and re-encoded** (your 1024px file becomes 720×720). So you are judging what the feed
+will actually serve, not your local file. It also shows the Page name, avatar, scheduled
+badge, the message with hashtags and links styled, and the permalink.
+
+That makes the intended loop: **schedule a batch with the first post a couple of days out,
+preview the lot, and cancel anything you don't like** — cancelling works right up until a post
+goes live. This is the closest thing to the Business Suite scheduled view that Meta provides
+for API posts.
+
 ## Changing your mind
 
 ```bash
@@ -312,6 +334,7 @@ write over an existing draft rather than trusting the arithmetic.
 | `fb_api.py token [PAGE_ID]` | mint the non-expiring Page token (re-run to switch Pages) |
 | `fb_api.py test-post [--now]` | create a test post; `--now` publishes immediately |
 | `fb_api.py list` | what's scheduled, plus recent published posts |
+| `fb_api.py preview [POST_ID]` | render scheduled posts as Facebook will (uses FB's own image asset) |
 | `fb_api.py past-posts [--limit N]` | sync published posts → `data/past_posts.txt` |
 | `fb_api.py cancel POST_ID` | delete a post |
 | `fb_api.py schedule --start DATE [--every N] [--at HH:MM] [--dry-run]` | schedule `approved/` |

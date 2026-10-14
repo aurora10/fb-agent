@@ -10,12 +10,13 @@ See docs/meta-api-setup.md for how to obtain those.
   ./scripts/fb_api.py test-post [--now]            create a scheduled test post
   ./scripts/fb_api.py list                         list scheduled / unpublished posts
   ./scripts/fb_api.py past-posts [--limit N]       sync published posts -> data/past_posts.txt
+  ./scripts/fb_api.py preview [POST_ID]            render as Facebook will show it
   ./scripts/fb_api.py cancel POST_ID               delete a post
   ./scripts/fb_api.py schedule --start DATE [--every N] [--at HH:MM] [--dry-run]
                                                    schedule approved/ posts, then move to done/
                                                    (defaults: every 2 days at 19:05 local)
 """
-import json, mimetypes, os, sys, urllib.error, urllib.parse, urllib.request, uuid
+import json, mimetypes, os, re, sys, urllib.error, urllib.parse, urllib.request, uuid
 from datetime import date, datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
@@ -390,6 +391,124 @@ def cmd_past_posts(argv):
               f"{min(400, len(rows))}-post angle digest")
 
 
+CARD = """
+<div class="post">
+  <div class="head">
+    <img class="avatar" src="__AVATAR__" alt="">
+    <div>
+      <div class="page">__PAGE__</div>
+      <div class="sub">__WHEN__ · <span class="globe">&#9679;</span></div>
+    </div>
+  </div>
+  <div class="body">__MESSAGE__</div>
+  __IMAGE__
+  <div class="foot"><span>Vind ik leuk</span><span>Reageren</span><span>Delen</span></div>
+  <div class="id">__ID__ &middot; <a href="__PERMALINK__" target="_blank">permalink</a></div>
+</div>
+"""
+
+PAGE_HTML = """<!doctype html><meta charset=utf-8>
+<title>__TITLE__</title>
+<style>
+body{font-family:-apple-system,Segoe UI,Roboto,Helvetica,sans-serif;background:#f0f2f5;margin:0;padding:24px}
+h1{font-size:15px;color:#65676b;font-weight:500;max-width:640px;margin:0 auto 6px}
+.hint{font-size:13px;color:#65676b;max-width:640px;margin:0 auto 18px}
+.wrap{max-width:640px;margin:0 auto;display:flex;flex-direction:column;gap:20px}
+.post{background:#fff;border-radius:8px;box-shadow:0 1px 2px rgba(0,0,0,.2);overflow:hidden}
+.head{display:flex;gap:10px;align-items:center;padding:12px 14px 8px}
+.avatar{width:40px;height:40px;border-radius:50%;object-fit:cover;background:#ddd}
+.page{font-weight:600;font-size:15px;color:#050505}
+.sub{font-size:12px;color:#65676b;display:flex;gap:5px;align-items:center}
+.globe{font-size:9px;color:#65676b}
+.badge{background:#e7f3ff;color:#1877f2;border-radius:4px;padding:1px 6px;font-size:11px;font-weight:600}
+.body{padding:4px 14px 12px;font-size:15px;line-height:1.35;color:#050505;white-space:pre-wrap}
+.tag{color:#1877f2}
+img.shot{width:100%;display:block;background:#e4e6eb}
+.foot{display:flex;justify-content:space-around;border-top:1px solid #e4e6eb;margin:0 14px;padding:8px 0;font-size:14px;color:#65676b;font-weight:600}
+.id{font-size:11px;color:#8a8d91;padding:0 14px 12px;word-break:break-all}
+.id a{color:#8a8d91}
+.err{background:#fff3cd;border-left:4px solid #ffc107;padding:12px;border-radius:6px;font-size:14px}
+</style>
+<h1>__TITLE__</h1>
+<div class="hint">Rendered from Facebook's own data: the image below is the asset Facebook stored
+(<code>full_picture</code>), already cropped and re-encoded — not your local file.</div>
+<div class="wrap">__CARDS__</div>
+"""
+
+
+def _esc(s):
+    return (s or "").replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
+
+
+def _linkify(text):
+    """Escape, then make #hashtags and bare URLs blue like Facebook does."""
+    out = _esc(text)
+    out = re.sub(r"(#[\w\u00c0-\u024f]+)", r'<span class="tag">\1</span>', out)
+    out = re.sub(r"(https?://\S+|(?<![\w.])[\w.-]+\.(?:be|nl|com|eu)(?:/\S*)?)",
+                 r'<span class="tag">\1</span>', out)
+    return out
+
+
+def cmd_preview(argv):
+    """Render posts as Facebook will show them, from Facebook's own assets.
+
+    With a POST_ID renders that one; with no argument renders everything in the local
+    ledger, which is otherwise the only view of the queue (Business Suite does not list
+    API-scheduled posts, and no API edge does either).
+    """
+    tok, pid = env("FB_PAGE_TOKEN"), env("FB_PAGE_ID")
+    ids = [a for a in argv if a.strip()]
+    if not ids:
+        ids = [r["id"] for r in ledger_load() if r.get("id", "").startswith(f"{pid}_")]
+    if not ids:
+        print("nothing scheduled to preview — schedule a post first, or pass a POST_ID")
+        return
+
+    page = graph(pid, {"fields": "name,picture", "access_token": tok}, soft=True) or {}
+    pname = page.get("name", "Page")
+    avatar = ((page.get("picture") or {}).get("data") or {}).get("url", "")
+
+    cards, missing = [], 0
+    for post_id in ids:
+        d = graph(post_id, {
+            "fields": "message,full_picture,is_published,scheduled_publish_time,"
+                      "created_time,permalink_url",
+            "access_token": tok,
+        }, soft=True)
+        if d is None:
+            missing += 1
+            cards.append(f'<div class="err">could not read {_esc(post_id)} — '
+                         f'cancelled, or not visible to this token</div>')
+            continue
+        ts = d.get("scheduled_publish_time")
+        if d.get("is_published"):
+            when = f'<span class="badge">gepubliceerd</span> ' + \
+                   (datetime.fromtimestamp(ts).strftime("%d %b %H:%M") if ts else "")
+        elif ts:
+            when = '<span class="badge">gepland</span> ' + \
+                   datetime.fromtimestamp(ts).strftime("%d %b %H:%M")
+        else:
+            when = ""
+        img = f'<img class="shot" src="{_esc(d["full_picture"])}" alt="">' if d.get("full_picture") else ""
+        cards.append(CARD
+                     .replace("__AVATAR__", _esc(avatar))
+                     .replace("__PAGE__", _esc(pname))
+                     .replace("__WHEN__", when)
+                     .replace("__MESSAGE__", _linkify(d.get("message", "")))
+                     .replace("__IMAGE__", img)
+                     .replace("__ID__", _esc(post_id))
+                     .replace("__PERMALINK__", _esc(d.get("permalink_url", "#"))))
+
+    out = BASE / "previews" / "scheduled.html"
+    out.parent.mkdir(parents=True, exist_ok=True)
+    title = f"{len(ids) - missing} post(s) as Facebook will render them"
+    out.write_text(PAGE_HTML.replace("__TITLE__", _esc(title))
+                            .replace("__CARDS__", "".join(cards)))
+    print(f"[ok] {out.relative_to(BASE)}: {len(ids) - missing} post(s) rendered"
+          + (f", {missing} unreadable" if missing else ""))
+    print("     open with: open previews/scheduled.html")
+
+
 def cmd_schedule(argv):
     def opt(name, default=None):
         return argv[argv.index(name) + 1] if name in argv else default
@@ -460,6 +579,8 @@ if __name__ == "__main__":
         cmd_list()
     elif cmd == "cancel":
         cmd_cancel(rest[0] if rest else die("usage: cancel POST_ID"))
+    elif cmd == "preview":
+        cmd_preview(rest)
     elif cmd == "schedule":
         cmd_schedule(rest)
     elif cmd == "past-posts":

@@ -177,6 +177,30 @@ else
   echo "   !! unclear error; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
+echo "-- fb_api preview: no template placeholder survives rendering"
+out="$(cd "$T" && "$V" - <<'PY'
+import importlib.util, re
+spec = importlib.util.spec_from_file_location("fb_api", "scripts/fb_api.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+card = m.CARD
+for k in ("AVATAR", "PAGE", "WHEN", "MESSAGE", "IMAGE", "ID", "PERMALINK"):
+    card = card.replace(f"__{k}__", "x")
+page = m.PAGE_HTML.replace("__TITLE__", "t").replace("__CARDS__", card)
+left = re.findall(r"__[A-Z_]+__", card + page)
+print("LEFT=" + (",".join(left) if left else "none"))
+# escaping must hold, and hashtags/domains get styled
+assert "&lt;script&gt;" in m._linkify("<script>"), "escaping broken"
+assert 'class="tag"' in m._linkify("einde #bouwsector"), "hashtags not styled"
+assert 'class="tag"' in m._linkify("kijk op constructief-bouw.be"), "domain not styled"
+print("SANITISE=ok")
+PY
+)"
+if grep -q "LEFT=none" <<<"$out" && grep -q "SANITISE=ok" <<<"$out"; then
+  echo "   ok: placeholders filled, escaping + link styling hold"
+else
+  echo "   !! preview template problem; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- history block: every published post contributes an angle hook"
 # Own fixture: data/past_posts.txt is gitignored, so a fresh clone has none.
 printf 'Fixture post one about gevelrenovatie.\nFixture post two about dakwerken.\nFixture post three about betonbouw.\n' > "$T/data/past_posts.txt"
