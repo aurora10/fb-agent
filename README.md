@@ -205,6 +205,23 @@ VISUAL STYLE — PREMIUM ISOMETRIC 3D EDITORIAL ILLUSTRATION
 Scene comes first on purpose: providers with a prompt limit (Pollinations truncates at 300
 characters) lose the style rather than the content.
 
+### The call-to-action is fixed too
+
+Every post ends with the text in `data/cta.txt`, inserted between the body and the hashtags:
+
+```
+<body text>
+
+Plaats uw aanvraag bij ons:
+👉 https://constructief-bouw.be/nl/werkgevers
+#hashtags
+```
+
+It is **not** model-written. Left to the model it drifted: within one batch 5 posts used
+`/nl/werkgevers` and 8 used the bare domain, while 29 of the 50 published posts use the full
+link. `fb_plan.py` now asks for the body and the hashtags separately and assembles the post
+itself, so the CTA is identical everywhere and changing it is an edit to that file.
+
 **This means a draft prompt must not contradict the style.** `fb_plan.py` is instructed to
 write scene-only, but drafts written before `data/image_style.txt` existed say
 "photorealistic, documentary style" — which fights it. Fix existing drafts with:
@@ -403,6 +420,7 @@ write over an existing draft rather than trusting the arithmetic.
 | --- | --- |
 | `data/context.txt` | your positioning, injected into every post prompt |
 | `data/image_style.txt` | the house visual style, appended to every image prompt |
+| `data/cta.txt` | the fixed call-to-action, appended to every post |
 | `data/topics.txt` | topic queue (one per line) — fed by you or `fb_content_plan.py` |
 | `data/past_posts.txt` | published history, newest first — synced by `fb_api.py past-posts` (gitignored) |
 | `data/seeds.txt` | seed themes for `fb_content_plan.py` (one per line, `#` comments) |

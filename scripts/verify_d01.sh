@@ -286,6 +286,43 @@ else
   echo "   !! house style wiring broken; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
+echo "-- post assembly: fixed CTA from data/cta.txt lands between body and hashtags"
+out="$(cd "$T" && "$V" - <<'PY'
+import sys
+sys.path.insert(0, "scripts")
+from fb_llm import compose_post, cta, strip_tags
+
+c = cta()
+assert c, "data/cta.txt not loaded"
+assert "constructief-bouw.be" in c, c
+
+body = "Een vaste ploeg geeft stabiliteit, maar geen elasticiteit."
+p = compose_post(body, ["onderaanneming", "#bouwteam", "werfplanning"])
+assert p.startswith(body), "body must come first"
+assert c in p, "pinned CTA missing"
+assert p.index(c) < p.rindex("#"), "CTA must precede the hashtag trail"
+assert "#onderaanneming" in p and "##" not in p, "hashtags must normalise to one #"
+
+# a model that appends its own tags anyway must not produce duplicates
+assert "##" not in p
+assert strip_tags("Body text. #een #twee") == "Body text."
+assert strip_tags("Body text.") == "Body text."
+
+# changing the file changes every future post
+real = compose_post
+import fb_llm
+fb_llm.data_file = lambda n: "NIEUWE CTA" if n == "cta.txt" else ""
+assert fb_llm.cta() == "NIEUWE CTA"
+assert "NIEUWE CTA" in fb_llm.compose_post("Body.", ["tag"])
+print("CTA=ok")
+PY
+)"
+if grep -q "CTA=ok" <<<"$out"; then
+  echo "   ok: pinned, ordered, one # per tag, file is the single source"
+else
+  echo "   !! CTA assembly broken; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- history block: every published post contributes an angle hook"
 # Own fixture: data/past_posts.txt is gitignored, so a fresh clone has none.
 printf 'Fixture post one about gevelrenovatie.\nFixture post two about dakwerken.\nFixture post three about betonbouw.\n' > "$T/data/past_posts.txt"

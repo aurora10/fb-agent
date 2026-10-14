@@ -12,7 +12,8 @@ import json, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import BASE, ask, client, data_file, history_block, show_models
+from fb_llm import (BASE, ask, client, compose_post, data_file, history_block,
+                    show_models, strip_tags)
 
 CTX = data_file("context.txt")
 TOPICS = BASE / "data" / "topics.txt"
@@ -48,7 +49,8 @@ def plan(topics):
         "Je schrijft Facebook-posts voor Constructief (constructief-bouw.be), "
         "een Belgische tussenpersoon die voor gecontroleerde Oost-Europese bouwteams legt voor aannemers. "
         "Toon: professioneel, direct, Vlaams Nederlands. Max 120 woorden. "
-        "Eindig met 1 call-to-action (contact/website) + 3-5 hashtags. "
+        "Schrijf ALLEEN de body: geen call-to-action, geen URL, geen hashtags, geen "
+        "afsluitende contactvraag — die worden er later vast aangezet. "
         f"Context: {CTX[:2000]}\n\n"
         + history_block()
     )
@@ -66,10 +68,16 @@ def plan(topics):
             "visuele stijl komt uit een aparte vaste stijlprompt en mag daar niet mee "
             "conflicteren. Noem dus niet 'photorealistic', 'cinematic', '3D render' of "
             "dergelijke. Geen logo's of tekst in beeld, geen frontale gezichten.\n\n"
-            "JSON antwoord: {\"post\": \"...\", \"image_prompt\": \"...\"}"
+            "Geef 5 Nederlandstalige hashtags als losse lijst (zonder # ervoor).\n\n"
+            "JSON antwoord: {\"post\": \"...\", \"hashtags\": [\"...\"], "
+            "\"image_prompt\": \"...\"}"
         ))
         if "post" not in data:
             sys.exit(f"error: model returned no 'post' key for topic {topic!r}")
+        # The CTA is fixed (data/cta.txt), not model-written: left to the model it drifted
+        # from the Page's own convention. Belt and braces in case the model still appends tags.
+        body = strip_tags(data["post"])
+        data["post"] = compose_post(body, data.get("hashtags") or [])
         data["topic"] = topic
         data["status"] = "draft"
         out.write_text(json.dumps(data, ensure_ascii=False, indent=2))

@@ -34,6 +34,32 @@ def data_file(name):
     return p.read_text() if p.exists() else ""
 
 
+# --------------------------------------------------------------- post assembly
+# The call-to-action is fixed, not model-written. Left to the model it drifted: across one
+# batch, 5 posts used the /nl/werkgevers link and 8 used the bare domain, while 29 of the
+# 50 published posts use the full link. Edit data/cta.txt to change it everywhere.
+
+CTA_FILE = "cta.txt"
+
+
+def cta():
+    return data_file(CTA_FILE).strip()
+
+
+def strip_tags(text):
+    """Drop a trailing hashtag run, in case a model appends one anyway."""
+    return re.sub(r"(\s*#[\w\u00c0-\u024f]+)+\s*$", "", (text or "").strip()).strip()
+
+
+def compose_post(body, hashtags=()):
+    """body -> CTA -> hashtags, matching the Page's existing convention."""
+    body = (body or "").strip()
+    tags = " ".join(h if h.startswith("#") else f"#{h}"
+                    for h in (t.strip() for t in hashtags) if h)
+    parts = [p for p in (body, cta(), tags) if p]
+    return "\n\n".join(parts[:2]) + (f"\n{tags}" if len(parts) > 2 else "")
+
+
 def parse_json(content):
     """Models sometimes wrap JSON in ``` fences or add prose around it."""
     content = (content or "").strip()
