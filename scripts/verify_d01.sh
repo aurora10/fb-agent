@@ -372,12 +372,13 @@ echo "-- sites: SITE routes to sites/<name>, shared/ still falls through, no lea
 out="$(cd "$T" && "$V" - <<'PROBE'
 import json, os, subprocess, sys
 
-def run(site, code):
+def run(site, code, force_empty=False):
     env = dict(os.environ)
-    if site:
+    env.pop("SITE", None)
+    if force_empty:
+        env["SITE"] = ""          # present but empty, exactly as `SITE= cmd` produces
+    elif site:
         env["SITE"] = site
-    else:
-        env.pop("SITE", None)
     r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
     assert r.returncode == 0, r.stderr
     return json.loads(r.stdout.strip().splitlines()[-1])
@@ -398,6 +399,15 @@ A = run(None, probe)
 B = run("crewnetusa", probe)
 
 assert A["site"] == "" and A["root"] is True, A        # SITE unset -> repo is the site
+
+# An explicit empty SITE must force the repo root even when .env names a site,
+# otherwise a stray SITE in .env has no escape hatch back to the first Page.
+open(".env", "w").write("SITE=crewnetusa\n")
+from_env = run(None, probe)
+forced = run(None, probe, force_empty=True)
+os.remove(".env")
+assert from_env["site"] == "crewnetusa", from_env      # .env is honoured when SITE is absent
+assert forced["site"] == "" and forced["root"] is True, forced   # `SITE=` overrides it
 assert B["site"] == "crewnetusa" and B["root"] is False, B
 assert B["base"] == "crewnetusa", B
 assert "You write for Crewnet" in B["persona"], B       # site persona wins

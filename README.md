@@ -136,7 +136,33 @@ Select one with a single variable:
 
 ```bash
 SITE=crewnetusa .venv/bin/python scripts/fb_plan.py --limit 14
-# or set SITE=crewnetusa in the shared .env to make it the default
+```
+
+That is ordinary shell syntax: the variable applies to that one command and is not
+remembered. Two consequences worth knowing:
+
+- **It does not carry across `&&`.** `SITE=x cmd1 && cmd2` gives `cmd2` no SITE. Repeat the
+  prefix, or use one of the options below.
+- **`SITE=` (empty) means the repo root**, i.e. Constructief. That is the escape hatch.
+
+To avoid repeating it, either set it for your terminal session:
+
+```bash
+export SITE=crewnetusa     # every later command in this window; `unset SITE` to undo
+```
+
+…or make it the default in the shared `.env`:
+
+```
+SITE=crewnetusa
+```
+
+Both are convenient and both are easy to forget when you switch back — a stray `SITE`
+would point Constructief's queue at the other Page. `fb_api.py check` names the Page, and
+every `schedule` run now prints its target first:
+
+```
+[..] site: crewnetusa   page: 1357946317402134
 ```
 
 **Rules that keep this safe:**

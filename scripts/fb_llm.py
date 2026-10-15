@@ -26,8 +26,13 @@ DEFAULT_MODEL = "gpt-5.4-mini"          # override with OPENAI_MODEL in .env
 
 
 def _site_name():
-    """Real environment wins, then the shared .env, else '' (= the repo root is the site)."""
-    if os.environ.get("SITE", "").strip():
+    """Real environment wins, then the shared .env, else '' (= the repo root is the site).
+
+    Tests for PRESENCE, not truthiness, so `SITE= cmd` can force the repo root even when
+    the shared .env names a site. Without that there is no escape hatch, and a stray
+    SITE=crewnetusa in .env would silently route Constructief commands at the other Page.
+    """
+    if "SITE" in os.environ:
         return os.environ["SITE"].strip()
     try:
         return (dotenv_values(REPO / ".env").get("SITE") or "").strip()

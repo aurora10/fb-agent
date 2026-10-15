@@ -554,6 +554,11 @@ def cmd_schedule(argv):
 
     dry = "--dry-run" in argv
     tok, pid = (None, None) if dry else (env("FB_PAGE_TOKEN"), env("FB_PAGE_ID"))
+    # Say which site and Page this run targets. Scheduling is the step where picking the
+    # wrong site becomes a public mistake rather than a local one.
+    from fb_llm import SITE as _site
+    print(f"[..] site: {_site or '(repo root)'}   page: {pid or os.environ.get('FB_PAGE_ID', '?')}"
+          + ("   (dry run)" if dry else ""))
     if not dry:
         (BASE / "done").mkdir(parents=True, exist_ok=True)   # gitignored: may not exist
     start = date.fromisoformat(opt("--start", (date.today() + timedelta(days=1)).isoformat()))
