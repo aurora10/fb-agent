@@ -17,6 +17,7 @@ echo "-- scaffold mirroring a FRESH CLONE"
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
 cp -r "$ROOT/scripts" "$ROOT/data" "$ROOT/shared" "$ROOT/approve" "$T/"
+ln -s "$ROOT/.venv" "$T/.venv"   # approve resolves the site root via the venv interpreter
 # Deliberately create NO pipeline dirs: drafts/, approved/, images/, previews/ and done/
 # are all gitignored, so a fresh clone has none of them and every step must cope.
 

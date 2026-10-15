@@ -18,7 +18,10 @@ Select a site with SITE in the shared .env, or per command:
 import json, os, re, sys
 from pathlib import Path
 from dotenv import dotenv_values, load_dotenv
-from openai import OpenAI, BadRequestError
+
+# Deliberately NOT imported at module scope: `import openai` costs ~1.3s, and every one of
+# the scripts below imports this module. Deferring it keeps a script that never calls the
+# API (help, preview, schedule --dry-run, the whole offline test suite) fast to start.
 
 REPO = Path(__file__).resolve().parent.parent
 SHARED = REPO / "shared"
@@ -52,6 +55,7 @@ load_dotenv(REPO / ".env")
 
 
 def client():
+    from openai import OpenAI
     if not os.environ.get("OPENAI_API_KEY"):
         sys.exit(f"error: OPENAI_API_KEY is not set — add it to {REPO / '.env'}\n"
                  f"       (see .env.example; get a key at https://platform.openai.com/api-keys)")
@@ -118,6 +122,7 @@ def parse_json(content):
 
 def ask(cl, system, user):
     """One JSON-mode completion, falling back to plain completion for models without it."""
+    from openai import BadRequestError
     msgs = [{"role": "system", "content": system}, {"role": "user", "content": user}]
     try:
         r = cl.chat.completions.create(model=model(), messages=msgs,

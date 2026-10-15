@@ -1,11 +1,36 @@
 #!/usr/bin/env bash
 # Approve drafts: ./approve 1 3 07   -> moves to approved/ as post_NN.json
+#
+# Site-aware: the target is resolved through fb_llm, so `SITE=crewnetusa ./approve 2`
+# moves sites/crewnetusa/drafts/draft_02.json, and with SITE unset it uses the repo root.
+set -euo pipefail
 cd "$(dirname "$0")"
-mkdir -p approved drafts        # approved/ is gitignored, so absent on a fresh clone
+
+PY=.venv/bin/python
+[ -x "$PY" ] || { echo "!! no venv at $PY — see README Part 1 Step 1"; exit 1; }
+
+if [ "$#" -eq 0 ]; then
+  echo "usage: ./approve NN [NN ...]"
+  exit 1
+fi
+
+# Resolve the active site root, and say which one: approving the wrong site is silent.
+read -r ROOT SITE_NAME <<<"$("$PY" -c "
+import sys; sys.path.insert(0, 'scripts')
+import fb_llm
+print(fb_llm.BASE, fb_llm.SITE or '(repo-root)')
+")"
+
+echo "[..] site: $SITE_NAME"
+mkdir -p "$ROOT/approved" "$ROOT/drafts"
+
 for n in "$@"; do
   n=$(printf "%02d" "$((10#$n))")
-  f="drafts/draft_$n.json"
-  [ -f "$f" ] || { echo "!! no drafts/draft_$n.json"; continue; }
-  mv "$f" "approved/post_$n.json"
-  echo "[ok] approved post_$n  (image: images/$n.png)"
+  f="$ROOT/drafts/draft_$n.json"
+  if [ ! -f "$f" ]; then
+    echo "!! no draft_$n.json in $SITE_NAME"
+    continue
+  fi
+  mv "$f" "$ROOT/approved/post_$n.json"
+  echo "[ok] approved post_$n"
 done
