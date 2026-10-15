@@ -23,9 +23,14 @@ FOLDERS = ("drafts", "approved", "done")
 TAG_RE = re.compile(r"((?:\s*#[\w\u00c0-\u024f]+)+)\s*$")
 # Phrases that mark the closing call-to-action. Deliberately narrow: a false positive
 # silently deletes a real sentence, so this errs towards leaving text alone.
+# The URL is the reliable signal; the phrases are a hint list and are kept per language
+# so an English site's CTA is caught as well as a Dutch one.
 CTA_HINT = re.compile(
-    r"(https?://\S+|constructief-bouw\.be|contacteer ons|neem contact|plan een gesprek|"
-    r"meer weten|ontdek hoe|bekijk onze|vraag het aan|bel ons|stuur een bericht)",
+    r"(https?://\S+|constructief-bouw\.be|crewnetusa\.com"
+    r"|contacteer ons|neem contact|plan een gesprek|meer weten|ontdek hoe|bekijk onze"
+    r"|vraag het aan|bel ons|stuur een bericht"
+    r"|request a crew|get in touch|apply here|book a|contact us|reach out|call us"
+    r"|get started|sign up|learn more)",
     re.I,
 )
 
