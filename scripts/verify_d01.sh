@@ -425,6 +425,41 @@ else
   echo "   !! site routing broken; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
+echo "-- every script honours SITE (a missed one silently reads the repo root)"
+out="$(cd "$T" && "$V" - <<'PROBE'
+import importlib.util, pathlib, os, sys
+
+os.environ["SITE"] = "crewnetusa"
+os.makedirs("sites/crewnetusa/data", exist_ok=True)
+os.makedirs("sites/crewnetusa/drafts", exist_ok=True)
+open("sites/crewnetusa/drafts/draft_01.json", "w").write(
+    '{"post":"t","image_prompt":"p","topic":"t","status":"draft"}\n')
+
+bad = []
+for path in sorted(pathlib.Path("scripts").glob("*.py")):
+    name = path.stem
+    spec = importlib.util.spec_from_file_location(name, str(path))
+    m = importlib.util.module_from_spec(spec)
+    try:
+        spec.loader.exec_module(m)
+    except SystemExit:
+        continue
+    base = getattr(m, "BASE", None)
+    if base is None:
+        continue                      # helper modules may legitimately have no BASE
+    if not str(base).endswith("sites/crewnetusa"):
+        bad.append(f"{name} -> {base}")
+
+assert not bad, "scripts ignoring SITE: " + ", ".join(bad)
+print("SITEHONOURED=ok")
+PROBE
+)"
+if grep -q "SITEHONOURED=ok" <<<"$out"; then
+  echo "   ok: all scripts resolve the active site"
+else
+  echo "   !! a script ignores SITE; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- history block: every published post contributes an angle hook"
 # Own fixture: data/past_posts.txt is gitignored, so a fresh clone has none.
 printf 'Fixture post one about gevelrenovatie.\nFixture post two about dakwerken.\nFixture post three about betonbouw.\n' > "$T/data/past_posts.txt"

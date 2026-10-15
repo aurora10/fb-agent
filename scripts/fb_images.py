@@ -12,8 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fb_imagegen import describe, generate
-
-BASE = Path(__file__).parent.parent
+from fb_llm import BASE   # honours SITE / sites/<name>
 
 
 def wanted(argv):
