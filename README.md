@@ -132,6 +132,29 @@ sites/
     drafts/ approved/ done/ images/ previews/
 ```
 
+### The `./fb` shorthand
+
+Rather than typing a site and a script path every time, there is a dispatcher:
+
+```bash
+./fb sites                                   # list the sites that exist
+./fb crewnetusa check
+./fb crewnetusa plan --limit 14
+./fb crewnetusa gallery
+./fb crewnetusa images 1 2 3
+./fb crewnetusa schedule --dry-run --start 2026-10-16
+./fb root list                               # root = the repo root (Constructief)
+./fb root verify
+```
+
+`./fb <site> <command>` is equivalent to `SITE=<site> .venv/bin/python scripts/<script>`,
+and it refuses an unknown site name instead of silently creating one. `./fb` with no
+arguments lists every command; `./fb root run fb_api.py list` reaches any script directly.
+
+**The site is always explicit**, deliberately: a wrong site publishes to the wrong Page.
+
+The long form still works and is what the rest of this document spells out:
+
 Select one with a single variable:
 
 ```bash

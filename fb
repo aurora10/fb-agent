@@ -1,0 +1,102 @@
+#!/usr/bin/env bash
+# Shorthand for the whole pipeline, so a site and a script path don't have to be retyped.
+#
+#   ./fb <site> <command> [args...]
+#   ./fb sites                      list the sites that exist
+#
+# Examples:
+#   ./fb crewnetusa plan --limit 14
+#   ./fb crewnetusa gallery
+#   ./fb crewnetusa schedule --dry-run --start 2026-10-16
+#   ./fb root check                 (root = the repo root, i.e. Constructief)
+#
+# The site is always explicit. That is deliberate: a wrong site is not a local mistake,
+# it publishes to the wrong Page.
+set -euo pipefail
+cd "$(dirname "$0")"
+
+PY=.venv/bin/python
+[ -x "$PY" ] || { echo "!! no venv at $PY — see README Part 1 Step 1"; exit 1; }
+
+usage() {
+  cat <<'EOF'
+usage: ./fb <site> <command> [args...]
+       ./fb sites
+
+commands:
+  topics [SEED...]      propose post topics from seeds  -> data/topics.txt
+  plan [--limit N]      write posts + image prompts     -> drafts/
+  gallery               build the draft review gallery  -> previews/index.html
+  images [NN...]        render images                   -> images/
+  regen NN ["prompt"]   reword a prompt and/or redo one image  (--edit-only, --revert)
+  approve NN...         move drafts to approved/
+  check                 verify token, Page and tasks
+  schedule [opts]       schedule approved/  (--dry-run, --start, --every, --at)
+  list                  what is scheduled, plus recent published
+  preview [POST_ID]     render scheduled posts as Facebook will
+  cancel POST_ID        delete a post
+  past-posts            sync published posts -> data/past_posts.txt
+  token [PAGE_ID]       mint a never-expiring Page token
+  test-post [--now]     create a test post
+  restyle-prompts       rewrite draft prompts to scene-only
+  fix-cta [--dry-run]   replace an improvised CTA with the pinned one
+  export-csv            fallback: Business Suite bulk-upload CSV
+  verify                offline test suite (no network, no spend)
+  run SCRIPT [args]     run any script in scripts/ directly
+
+site:
+  root                  the repo root (Constructief)
+  <name>                a directory under sites/
+EOF
+}
+
+if [ "$#" -eq 0 ]; then usage; exit 1; fi
+
+if [ "$1" = "sites" ]; then
+  echo "root                 (the repo root)"
+  if [ -d sites ]; then
+    for d in sites/*/; do
+      [ -d "$d" ] || continue
+      printf '%s\n' "$(basename "$d")"
+    done
+  fi
+  exit 0
+fi
+
+if [ "$#" -lt 2 ]; then usage; exit 1; fi
+
+SITE_ARG="$1"; shift
+CMD="$1"; shift || true
+
+# Resolve the site. `root` means the repo root: export SITE as present-but-empty, which
+# fb_llm treats as "the repo is the site".
+if [ "$SITE_ARG" = "root" ]; then
+  export SITE=""
+elif [ -d "sites/$SITE_ARG" ]; then
+  export SITE="$SITE_ARG"
+else
+  echo "!! no site called '$SITE_ARG'"
+  echo "   available:"
+  echo "     root"
+  [ -d sites ] && for d in sites/*/; do [ -d "$d" ] && echo "     $(basename "$d")"; done
+  exit 1
+fi
+
+case "$CMD" in
+  topics)      exec "$PY" scripts/fb_content_plan.py "$@" ;;
+  plan)        exec "$PY" scripts/fb_plan.py "$@" ;;
+  gallery)     exec "$PY" scripts/fb_preview.py "$@" ;;
+  images)      exec "$PY" scripts/fb_images.py "$@" ;;
+  regen)       exec "$PY" scripts/fb_regen_image.py "$@" ;;
+  approve)     exec ./approve "$@" ;;
+  check|list|schedule|preview|cancel|token|past-posts|test-post)
+               exec "$PY" scripts/fb_api.py "$CMD" "$@" ;;
+  restyle-prompts) exec "$PY" scripts/fb_restyle_prompts.py "$@" ;;
+  fix-cta)     exec "$PY" scripts/fb_fix_cta.py "$@" ;;
+  export-csv)  exec "$PY" scripts/fb_export_csv.py "$@" ;;
+  verify)      exec bash scripts/verify_d01.sh "$@" ;;
+  run)
+    [ "$#" -ge 1 ] || { echo "!! run needs a script name, e.g. ./fb root run fb_api.py list"; exit 1; }
+    exec "$PY" "scripts/$1" "${@:2}" ;;
+  *) echo "!! unknown command '$CMD'"; echo; usage; exit 1 ;;
+esac

@@ -36,7 +36,17 @@ pre{{white-space:pre-wrap;font-family:inherit;font-size:14px}}
 </style>{''.join(cards)}""")
     with_img = sum(1 for c in cards if "<img " in c)
     print(f"[ok] previews/index.html ({len(cards)} cards, {with_img} with an image) — open in browser")
-    if cards and not with_img:
+
+    if not cards:
+        # An empty gallery after scheduling is normal, but reads like a failure. The file is
+        # still written, so a previously-good gallery cannot linger as stale content.
+        scheduled = len(list((BASE / "done").glob("post_*.json")))
+        print("[..] no drafts to review — drafts/ is empty.")
+        if scheduled:
+            print(f"     {scheduled} post(s) are in done/, i.e. already scheduled. To see the queue:")
+            print("       fb_api.py list        what is scheduled")
+            print("       fb_api.py preview     render them as Facebook will")
+    elif not with_img:
         print("[..] no images yet. After `fb_images.py`, re-run this to embed them — "
               "the gallery is a snapshot taken when it runs.")
 

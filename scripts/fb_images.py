@@ -60,8 +60,14 @@ def main(argv):
         todo.append((num, json.loads(f.read_text())["image_prompt"]))
 
     if not todo:
-        print("nothing to do — every selected draft already has an image"
-              if skipped else "no matching drafts")
+        if skipped:
+            print("nothing to do — every selected draft already has an image")
+        else:
+            scheduled = len(list((BASE / "done").glob("post_*.json")))
+            print("no drafts to render — drafts/ is empty")
+            if scheduled:
+                print(f"  ({scheduled} post(s) are already in done/, i.e. scheduled. "
+                      f"Use fb_api.py list to see them.)")
         return
 
     print(f"generating {len(todo)} image(s)"
