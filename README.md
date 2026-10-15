@@ -48,7 +48,7 @@ Open `.env` and fill in the OpenAI block:
 Not sure which text model your key can use?
 
 ```bash
-.venv/bin/python scripts/fb_plan.py --models
+./fb root plan --models
 ```
 
 **Image cost is per image, so test with one before rendering a batch.** Expect roughly
@@ -73,8 +73,8 @@ The two things that catch people:
 When you have `FB_APP_ID` and `FB_APP_SECRET` in `.env`:
 
 ```bash
-.venv/bin/python scripts/fb_api.py token    # 1x: mints a Page token that never expires
-.venv/bin/python scripts/fb_api.py check    # verify
+./fb root token    # 1x: mints a Page token that never expires
+./fb root check    # verify
 ```
 
 `check` should end in `ok`, with `expires : never` and `CREATE_CONTENT` in the tasks list.
@@ -86,8 +86,8 @@ Without this, the model writes blind: it has no idea what you have already publi
 repeats angles you covered months ago.
 
 ```bash
-.venv/bin/python scripts/fb_api.py past-posts          # whole history
-.venv/bin/python scripts/fb_api.py past-posts --limit 60
+./fb root past-posts          # whole history
+./fb root past-posts --limit 60
 ```
 
 Reads `/{page-id}/posts` and writes `data/past_posts.txt`, newest first. Each run replaces
@@ -158,7 +158,7 @@ The long form still works and is what the rest of this document spells out:
 Select one with a single variable:
 
 ```bash
-SITE=crewnetusa .venv/bin/python scripts/fb_plan.py --limit 14
+./fb crewnetusa plan --limit 14
 ```
 
 That is ordinary shell syntax: the variable applies to that one command and is not
@@ -222,8 +222,8 @@ Leave `POST_TZ` unset to use the machine's own timezone, as before.
 Getting the second Page's token — same app, no new one:
 
 ```bash
-SITE=crewnetusa .venv/bin/python scripts/fb_api.py token 1357946317402134
-SITE=crewnetusa .venv/bin/python scripts/fb_api.py check
+./fb crewnetusa token 1357946317402134
+./fb crewnetusa check
 ```
 
 Each site gets its own token. Page tokens are per Page, so the two are different strings
@@ -239,6 +239,31 @@ already have reaches every Page you administer.
 
 This is the routine. About 15 minutes, and it produces ~2 weeks of scheduled posts.
 
+Every command below is written as `./fb root …`, where `root` is the repo root — the first
+Page. **For another Page, swap that word:** `./fb crewnetusa plan --limit 14`.
+
+### The whole flow at a glance
+
+```bash
+./fb root check                                   # 0. right Page? token alive?
+./fb root past-posts                              #    load what you have published
+./fb root topics "gevelrenovatie" "testweek"      # 1. propose topics -> data/topics.txt
+#                                                  #    (edit that file: delete what you don't want)
+./fb root plan --limit 14                         # 2. write posts + image prompts -> drafts/
+./fb root gallery && open previews/index.html     # 3. review copy AND prompts  <- before images
+./fb root images                                  # 4. render images
+./fb root gallery && open previews/index.html     # 5. review the images
+./fb root approve 1 2 3 4 5                       # 6. approve what goes out
+./fb root schedule --dry-run --start 2026-11-01   # 7. see the plan, send nothing
+./fb root schedule --start 2026-11-01             # 8. schedule it
+./fb root list                                    # 9. confirm the queue
+./fb root preview                                 # 10. as Facebook will render them
+```
+
+`./fb` with no arguments lists every command, and `./fb sites` lists the Pages you can post
+to. The long form — `SITE=<site> .venv/bin/python scripts/<script>` — still works and is
+what the tooling actually runs.
+
 The order matters: **review the posts and their image prompts before generating any
 images.** Prompts are shown in the gallery even for drafts that have no image yet, so
 fixing a prompt costs seconds instead of a regeneration.
@@ -248,15 +273,15 @@ fixing a prompt costs seconds instead of a regeneration.
 First make sure the model knows what you have already published:
 
 ```bash
-.venv/bin/python scripts/fb_api.py past-posts
+./fb root past-posts
 ```
 
 Then let the agent propose the topics:
 
 ```bash
-.venv/bin/python scripts/fb_content_plan.py "gevelrenovatie" "personeelstekort" "testweek"
+./fb root topics "gevelrenovatie" "personeelstekort" "testweek"
 # or run with no arguments to use the seeds in data/seeds.txt
-.venv/bin/python scripts/fb_content_plan.py
+./fb root topics
 ```
 
 Generates ~10 intent-focused topics per seed — problem-aware (deadline risk, A1/Limosa
@@ -281,7 +306,7 @@ at 2-day spacing). `fb_content_plan.py` happily queue 90 topics, but generating 
 once means 90 drafts, 90 rate-limited images and an unusable review gallery:
 
 ```bash
-.venv/bin/python scripts/fb_plan.py --limit 14
+./fb root plan --limit 14
 ```
 
 `data/topics.txt` acts as a queue: the topics used are removed once they have been drafted,
@@ -295,8 +320,8 @@ before spending anything.
 Other forms:
 
 ```bash
-.venv/bin/python scripts/fb_plan.py                  # everything queued, no batching
-.venv/bin/python scripts/fb_plan.py "topic one" "topic two"   # inline; queue untouched
+./fb root plan                  # everything queued, no batching
+./fb root plan "topic one" "topic two"   # inline; queue untouched
 ```
 
 Writes `drafts/draft_NN.json`, each with a `post` and an `image_prompt`. Your positioning is
@@ -306,7 +331,7 @@ have already published.
 ## Step 3 — Review, and fix the image prompts
 
 ```bash
-.venv/bin/python scripts/fb_preview.py
+./fb root gallery
 open previews/index.html
 ```
 
@@ -352,8 +377,8 @@ write scene-only, but drafts written before `data/image_style.txt` existed say
 "photorealistic, documentary style" — which fights it. Fix existing drafts with:
 
 ```bash
-.venv/bin/python scripts/fb_restyle_prompts.py            # every draft
-.venv/bin/python scripts/fb_restyle_prompts.py 5 6 11     # or selected ones
+./fb root restyle-prompts            # every draft
+./fb root restyle-prompts 5 6 11     # or selected ones
 ```
 
 It rewrites only `image_prompt` (never the post text) and keeps the old value in
@@ -362,7 +387,7 @@ It rewrites only `image_prompt` (never the post text) and keeps the old value in
 To reword one scene by hand without generating anything:
 
 ```bash
-.venv/bin/python scripts/fb_regen_image.py 03 "brick facade renovation site in Flanders, scaffolding, no text, no logos" --edit-only
+./fb root regen 03 "brick facade renovation site in Flanders, scaffolding, no text, no logos" --edit-only
 ```
 
 `--edit-only` only updates `draft_03.json`. Without it, the same command also generates the
@@ -373,9 +398,9 @@ image, so you can go straight from "this prompt is wrong" to seeing the result.
 To try **one** post before committing to the batch — or any subset:
 
 ```bash
-.venv/bin/python scripts/fb_images.py 4          # just draft 4
-.venv/bin/python scripts/fb_images.py 4 7 12     # a few
-.venv/bin/python scripts/fb_images.py            # every draft still missing an image
+./fb root images 4          # just draft 4
+./fb root images 4 7 12     # a few
+./fb root images            # every draft still missing an image
 ```
 
 It prints which provider and model it is about to use, so you always know what is being
@@ -394,9 +419,9 @@ image model refuses is reported as `[BLOCKED]` and **not** retried — reword it
 Redo a single image at any time, with a new prompt or the stored one:
 
 ```bash
-.venv/bin/python scripts/fb_regen_image.py 03
-.venv/bin/python scripts/fb_regen_image.py 03 "different angle, wider shot"
-.venv/bin/python scripts/fb_regen_image.py 03 --revert     # undo a bad prompt
+./fb root regen 03
+./fb root regen 03 "different angle, wider shot"
+./fb root regen 03 --revert     # undo a bad prompt
 ```
 
 Then rerun `fb_preview.py` to see the result. The previous image is kept as
@@ -415,7 +440,7 @@ Moves those to `approved/`. Anything you skip stays in `drafts/` and is never pu
 ## Step 6 — Preview the schedule (nothing is sent)
 
 ```bash
-.venv/bin/python scripts/fb_api.py schedule --dry-run --start 2026-11-01
+./fb root schedule --dry-run --start 2026-11-01
 ```
 
 Prints exactly what would be scheduled and when:
@@ -433,7 +458,7 @@ Needs no token, touches nothing. Always look before you send.
 ## Step 7 — Schedule them for real
 
 ```bash
-.venv/bin/python scripts/fb_api.py schedule --start 2026-11-01
+./fb root schedule --start 2026-11-01
 ```
 
 Each post goes out every 2nd day at **19:05 local time**, with its image attached, then
@@ -453,7 +478,7 @@ Two rules the script enforces:
 ## Step 8 — Confirm what's queued
 
 ```bash
-.venv/bin/python scripts/fb_api.py list
+./fb root list
 ```
 
 ```
@@ -475,8 +500,8 @@ publish, and no API edge lists them either — so the ledger and this preview ar
 view. Render the real thing from Facebook's own data:
 
 ```bash
-.venv/bin/python scripts/fb_api.py preview            # everything in the ledger
-.venv/bin/python scripts/fb_api.py preview 1262992640226921_...   # one post
+./fb root preview            # everything in the ledger
+./fb root preview 1262992640226921_...   # one post
 open previews/scheduled.html
 ```
 
@@ -493,7 +518,7 @@ for API posts.
 ## Changing your mind
 
 ```bash
-.venv/bin/python scripts/fb_api.py cancel 1262992640226921_...   # remove a scheduled post
+./fb root cancel 1262992640226921_...   # remove a scheduled post
 ```
 
 Cancelling works until a post goes live. Once published, delete it in Meta Business Suite.
@@ -591,7 +616,7 @@ If the API path is unavailable, `fb_export_csv.py` still produces a Business Sui
 bulk-upload CSV:
 
 ```bash
-.venv/bin/python scripts/fb_export_csv.py 2026-11-01 2
+./fb root export-csv 2026-11-01 2
 # then: business.facebook.com -> Planner -> Create -> Bulk upload
 ```
 
