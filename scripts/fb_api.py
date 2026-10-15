@@ -21,7 +21,8 @@ from datetime import date, datetime, timedelta
 from pathlib import Path
 from dotenv import load_dotenv
 
-BASE = Path(__file__).parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fb_llm import BASE   # honours SITE / sites/<name>
 ENV_PATH = BASE / ".env"
 LEDGER = BASE / "done" / "scheduled_posts.json"   # local record of posts we scheduled
 API = "https://graph.facebook.com/v26.0"  # pinned: v18/v19/v20 are already dead

@@ -7,7 +7,8 @@ Accepts common column names: content/text/message/description (case-insensitive)
 import csv, sys
 from pathlib import Path
 
-BASE = Path(__file__).parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fb_llm import BASE   # honours SITE / sites/<name>
 
 def main():
     src = Path(sys.argv[1])

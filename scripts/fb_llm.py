@@ -1,25 +1,54 @@
 #!/usr/bin/env python3
-"""Shared OpenAI helpers for the fb-agent scripts.
+"""Shared helpers for the fb-agent scripts: site roots, env, OpenAI, post assembly.
 
-Lives in one place because fb_plan.py and fb_content_plan.py need to agree on the model
-default and on how model output is parsed — they silently diverged when that logic was
-duplicated.
+This module is the single place that decides WHERE a run reads and writes. Everything
+site-specific (Page identity, copy, topics, queue) lives under the active site root;
+everything shared (the API keys, the visual style) does not.
+
+Layout:
+    repo/.env                 shared: OPENAI_API_KEY, FB_APP_ID/SECRET, SITE=
+    repo/scripts/             shared, site-agnostic code — never edited per site
+    repo/shared/              shared assets, e.g. image_style.txt
+    repo/sites/<name>/        one site: .env, data/, drafts/, images/, done/ ...
+    repo/ (SITE unset)        the repo root itself is the site — the original layout
+
+Select a site with SITE in the shared .env, or per command:
+    SITE=crewnetusa .venv/bin/python scripts/fb_plan.py
 """
 import json, os, re, sys
 from pathlib import Path
-from dotenv import load_dotenv
+from dotenv import dotenv_values, load_dotenv
 from openai import OpenAI, BadRequestError
 
-BASE = Path(__file__).parent.parent
-ENV_PATH = BASE / ".env"
+REPO = Path(__file__).resolve().parent.parent
+SHARED = REPO / "shared"
 DEFAULT_MODEL = "gpt-5.4-mini"          # override with OPENAI_MODEL in .env
 
+
+def _site_name():
+    """Real environment wins, then the shared .env, else '' (= the repo root is the site)."""
+    if os.environ.get("SITE", "").strip():
+        return os.environ["SITE"].strip()
+    try:
+        return (dotenv_values(REPO / ".env").get("SITE") or "").strip()
+    except Exception:
+        return ""
+
+
+SITE = _site_name()
+BASE = (REPO / "sites" / SITE) if SITE else REPO
+ENV_PATH = BASE / ".env"
+
+# Site .env first, so its Page identity can never be clobbered by the shared one.
+# Rule that makes this safe: no key appears in both files — shared holds API keys,
+# the site holds FB_PAGE_ID / FB_PAGE_TOKEN only.
 load_dotenv(ENV_PATH)
+load_dotenv(REPO / ".env")
 
 
 def client():
     if not os.environ.get("OPENAI_API_KEY"):
-        sys.exit(f"error: OPENAI_API_KEY is not set — add it to {ENV_PATH}\n"
+        sys.exit(f"error: OPENAI_API_KEY is not set — add it to {REPO / '.env'}\n"
                  f"       (see .env.example; get a key at https://platform.openai.com/api-keys)")
     return OpenAI(timeout=120)
 
@@ -29,9 +58,16 @@ def model():
 
 
 def data_file(name):
-    """Contents of data/<name>, or '' when it does not exist."""
-    p = BASE / "data" / name
-    return p.read_text() if p.exists() else ""
+    """Site data/<name>, falling back to shared/<name>, else ''.
+
+    The fallback is what lets image_style.txt stay shared while context.txt, topics.txt,
+    seeds.txt, past_posts.txt and cta.txt are per site. A site overrides a shared asset
+    simply by having its own copy.
+    """
+    for p in (BASE / "data" / name, SHARED / name):
+        if p.exists():
+            return p.read_text()
+    return ""
 
 
 # --------------------------------------------------------------- post assembly

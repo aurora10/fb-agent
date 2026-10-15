@@ -1,9 +1,10 @@
 #!/usr/bin/env python3
 """Render drafts (with existing images) into previews/index.html gallery + per-post text."""
-import html, json
+import html, json, sys
 from pathlib import Path
 
-BASE = Path(__file__).parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fb_llm import BASE   # honours SITE / sites/<name>
 
 def main():
     (BASE / "previews").mkdir(parents=True, exist_ok=True)

@@ -108,6 +108,55 @@ effectively switched off.
 If you would rather import from a spreadsheet, `scripts/import_past_posts.py <export.csv>`
 still works; the API route is just less work.
 
+## Running a second Page
+
+One Meta app serves every Page you administer, and one codebase serves every Page you post
+to. Only the *data* differs per Page — never the code.
+
+```bash
+cp .env.example .env
+# .env is SHARED: OPENAI_API_KEY, FB_APP_ID, FB_APP_SECRET, SITE=
+```
+
+Each Page gets a site directory:
+
+```
+sites/
+  constructief/
+    .env       <- FB_PAGE_ID, FB_PAGE_TOKEN only
+    data/      <- persona.txt, context.txt, topics.txt, seeds.txt, cta.txt, past_posts.txt
+    drafts/ approved/ done/ images/ previews/
+  crewnetusa/
+    .env       <- FB_PAGE_ID=1357946317402134 + its own token
+    data/      <- English persona, context, CTA
+    drafts/ approved/ done/ images/ previews/
+```
+
+Select one with a single variable:
+
+```bash
+SITE=crewnetusa .venv/bin/python scripts/fb_plan.py --limit 14
+# or set SITE=crewnetusa in the shared .env to make it the default
+```
+
+**Rules that keep this safe:**
+
+- **No key appears in two `.env` files.** The shared file holds API keys; each site holds only
+  its own `FB_PAGE_ID` / `FB_PAGE_TOKEN`. That removes any precedence ambiguity.
+- **`shared/` is for assets all sites use** — currently `image_style.txt`. A site overrides a
+  shared asset simply by having its own copy in `data/`.
+- **`SITE` unset means the repo root *is* the site** — the original single-Page layout, byte
+  for byte. Nothing breaks if you never use this.
+
+Getting the second Page's token:
+
+```bash
+.venv/bin/python scripts/fb_api.py token 1357946317402134
+```
+
+**No new app, and no App Review.** Page tokens are per Page, but the app is not — the app you
+already have reaches every Page you administer.
+
 ---
 
 # Part 2 — Creating and scheduling posts
@@ -419,8 +468,10 @@ write over an existing draft rather than trusting the arithmetic.
 
 | Path | What |
 | --- | --- |
+| `data/persona.txt` | brand, output language and tone — the writer brief |
+| `data/planner.txt` | the topic-strategist brief for `fb_content_plan.py` |
 | `data/context.txt` | your positioning, injected into every post prompt |
-| `data/image_style.txt` | the house visual style, appended to every image prompt |
+| `shared/image_style.txt` | the house visual style, appended to every image prompt (shared by all sites) |
 | `data/cta.txt` | the fixed call-to-action, appended to every post |
 | `data/topics.txt` | topic queue (one per line) — fed by you or `fb_content_plan.py` |
 | `data/past_posts.txt` | published history, newest first — synced by `fb_api.py past-posts` (gitignored) |

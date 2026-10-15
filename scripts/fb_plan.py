@@ -15,6 +15,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fb_llm import (BASE, ask, client, compose_post, data_file, history_block,
                     show_models, strip_tags)
 
+PERSONA = data_file("persona.txt")     # brand + language + tone; per site
 CTX = data_file("context.txt")
 TOPICS = BASE / "data" / "topics.txt"
 BATCH_HINT = 14     # what one 29-day scheduling window holds at 2-day spacing
@@ -45,12 +46,10 @@ def next_number():
 def plan(topics):
     cl = client()
     (BASE / "drafts").mkdir(parents=True, exist_ok=True)
+    # The persona file carries the brand, the output language and the tone, so this module
+    # stays language-neutral and a second site is a data change, not a fork.
     system = (
-        "Je schrijft Facebook-posts voor Constructief (constructief-bouw.be), "
-        "een Belgische tussenpersoon die voor gecontroleerde Oost-Europese bouwteams legt voor aannemers. "
-        "Toon: professioneel, direct, Vlaams Nederlands. Max 120 woorden. "
-        "Schrijf ALLEEN de body: geen call-to-action, geen URL, geen hashtags, geen "
-        "afsluitende contactvraag — die worden er later vast aangezet. "
+        (PERSONA or "You write social media posts.") + "\n\n"
         f"Context: {CTX[:2000]}\n\n"
         + history_block()
     )
@@ -61,16 +60,15 @@ def plan(topics):
                      f"       this should not happen with max+1 numbering; check drafts/ "
                      f"for a numbering clash")
         data = ask(cl, system, (
-            f"Schrijf een Facebook-post over dit onderwerp: {topic}\n\n"
-            "Geef OOK een image_prompt in het Engels, maar beschrijf daarin ALLEEN DE SCENE: "
-            "welke objecten, personen, materialen en handelingen te zien zijn, en de compositie. "
-            "Beschrijf GEEN stijl, belichting, kleuren, camera-standpunt of rendering — de "
-            "visuele stijl komt uit een aparte vaste stijlprompt en mag daar niet mee "
-            "conflicteren. Noem dus niet 'photorealistic', 'cinematic', '3D render' of "
-            "dergelijke. Geen logo's of tekst in beeld, geen frontale gezichten.\n\n"
-            "Geef 5 Nederlandstalige hashtags als losse lijst (zonder # ervoor).\n\n"
-            "JSON antwoord: {\"post\": \"...\", \"hashtags\": [\"...\"], "
-            "\"image_prompt\": \"...\"}"
+            f"Write a Facebook post about this topic: {topic}\n\n"
+            "Also return an image_prompt in English describing ONLY THE SCENE: which objects, "
+            "people, materials and actions are visible, and the composition. Do NOT describe "
+            "style, lighting, colours, camera angle or rendering — the visual style comes from "
+            "a separate fixed style prompt and must not be contradicted. Never use "
+            "'photorealistic', 'cinematic' or '3D render'. No logos or text in frame, no "
+            "front-facing faces.\n\n"
+            "Return 5 hashtags in the same language as the post, as a list, without the #.\n\n"
+            "JSON: {\"post\": \"...\", \"hashtags\": [\"...\"], \"image_prompt\": \"...\"}"
         ))
         if "post" not in data:
             sys.exit(f"error: model returned no 'post' key for topic {topic!r}")

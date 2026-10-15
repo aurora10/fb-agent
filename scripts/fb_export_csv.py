@@ -3,11 +3,15 @@
 Planner bulk format (comma CSV): Date,Time,Content,Link,Image filename
 Run: ./scripts/fb_export_csv.py 2026-10-16 2      (start date, every N days, 10:00)
 """
-import csv, json, sys
+import csv, json, os, sys
 from datetime import date, timedelta
 from pathlib import Path
 
-BASE = Path(__file__).parent.parent
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from fb_llm import BASE   # honours SITE / sites/<name>
+
+# Per-site link for the fallback CSV export. Set BRAND_URL in the site .env.
+BRAND_URL = os.environ.get("BRAND_URL", "")
 
 def main():
     start = date.fromisoformat(sys.argv[1]) if len(sys.argv) > 1 else date.today() + timedelta(days=1)
@@ -24,7 +28,7 @@ def main():
             dta = json.loads(f.read_text())
             num = f.stem.split("_")[1]
             img = f"{num}.png" if (BASE / "images" / f"{num}.png").exists() else ""
-            w.writerow([d.isoformat(), "10:00", dta["post"], "https://constructief-bouw.be", img])
+            w.writerow([d.isoformat(), "10:00", dta["post"], BRAND_URL, img])
             f.rename(BASE / "done" / f.name)
             print(f"[ok] {d} 10:00  post_{num}")
     print(f"\n==> upload {out} in Meta Business Suite > Planner > Create > Bulk upload")

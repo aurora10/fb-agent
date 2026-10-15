@@ -16,7 +16,7 @@ echo "-- scripts compile (every .py in scripts/, so new files can't be forgotten
 echo "-- scaffold mirroring a FRESH CLONE"
 T="$(mktemp -d)"
 trap 'rm -rf "$T"' EXIT
-cp -r "$ROOT/scripts" "$ROOT/data" "$ROOT/approve" "$T/"
+cp -r "$ROOT/scripts" "$ROOT/data" "$ROOT/shared" "$ROOT/approve" "$T/"
 # Deliberately create NO pipeline dirs: drafts/, approved/, images/, previews/ and done/
 # are all gitignored, so a fresh clone has none of them and every step must cope.
 
@@ -261,7 +261,7 @@ sys.path.insert(0, "scripts")
 import fb_imagegen as g
 
 sty = g.style()
-assert sty, "data/image_style.txt not loaded"
+assert sty, "shared/image_style.txt not loaded"
 assert "ISOMETRIC" in sty.upper(), "style file looks wrong"
 assert "image_style.txt" in g.describe(), g.describe()
 
@@ -366,6 +366,52 @@ if grep -q "FIXCTA=ok" <<<"$out"; then
   echo "   ok: replaces, preserves body+tags, idempotent, refuses CTA-only posts"
 else
   echo "   !! CTA migration broken; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- sites: SITE routes to sites/<name>, shared/ still falls through, no leakage"
+out="$(cd "$T" && "$V" - <<'PROBE'
+import json, os, subprocess, sys
+
+def run(site, code):
+    env = dict(os.environ)
+    if site:
+        env["SITE"] = site
+    else:
+        env.pop("SITE", None)
+    r = subprocess.run([sys.executable, "-c", code], capture_output=True, text=True, env=env)
+    assert r.returncode == 0, r.stderr
+    return json.loads(r.stdout.strip().splitlines()[-1])
+
+os.makedirs("sites/crewnetusa/data", exist_ok=True)
+open("sites/crewnetusa/data/persona.txt", "w").write("You write for Crewnet in English.")
+open("sites/crewnetusa/data/cta.txt", "w").write("Apply here: https://crewnetusa.com")
+
+probe = ("import json, sys; sys.path.insert(0,'scripts'); import fb_llm as f;"
+         "print(json.dumps({'site': f.SITE,"
+         " 'root': f.BASE == f.REPO,"
+         " 'base': f.BASE.name,"
+         " 'persona': f.data_file('persona.txt')[:26],"
+         " 'cta': f.data_file('cta.txt')[:40],"
+         " 'style': len(f.data_file('image_style.txt'))}))")
+
+A = run(None, probe)
+B = run("crewnetusa", probe)
+
+assert A["site"] == "" and A["root"] is True, A        # SITE unset -> repo is the site
+assert B["site"] == "crewnetusa" and B["root"] is False, B
+assert B["base"] == "crewnetusa", B
+assert "You write for Crewnet" in B["persona"], B       # site persona wins
+assert "Crewnet" not in A["persona"], A                 # ...other site unaffected
+assert "crewnetusa.com" in B["cta"], B
+assert "Plaats uw aanvraag" in A["cta"], A               # site A keeps its own (Dutch) CTA
+assert A["style"] == B["style"] and A["style"] > 1000, (A["style"], B["style"])
+print("SITES=ok")
+PROBE
+)"
+if grep -q "SITES=ok" <<<"$out"; then
+  echo "   ok: per-site data isolated, shared style reaches both"
+else
+  echo "   !! site routing broken; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
 echo "-- history block: every published post contributes an angle hook"

@@ -12,6 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fb_llm import BASE, ask, client, data_file, history_block
 
 PER_SEED = 10
+PLANNER = data_file("planner.txt")     # strategist brief; per site
 CTX = data_file("context.txt")
 
 
@@ -44,19 +45,17 @@ def main(args):
     cl = client()
     # history_block() carries the published history AND the queued topics, so the model
     # knows what to avoid rather than relying on post-hoc filtering.
+    # Brief and output language come from data/planner.txt so a second site needs no code change.
     system = (
-        f"Je bent contentstrateeg voor Constructief (constructief-bouw.be). "
-        f"Maak {PER_SEED} Facebook-post-onderwerpen over het seed-thema voor aannemers in BE/NL. "
-        "Mix: probleem-bewust (werkvoorraad, deadlines, personeelstekort, A1/Limosa), "
-        "oplossing-bewust (testweek, screening, betaling op resultaat), bewijs, trade-specifiek (gevel/renovatie/dak/beton). "
-        "Max 15 woorden per onderwerp. Nederlandstalig.\n\n"
+        (PLANNER.replace("{n}", str(PER_SEED)) or
+         f"Propose {PER_SEED} social post topics about the seed theme.") + "\n\n"
         f"Context: {CTX[:1500]}\n\n"
         + history_block(also_avoid=queued)
     )
 
     proposed = []
     for seed in seed_list:
-        data = ask(cl, system, f"Seed-thema: {seed}\nJSON: {{\"topics\": [\"...\", ...]}}")
+        data = ask(cl, system, f"Seed theme: {seed}\nJSON: {{\"topics\": [\"...\", ...]}}")
         topics = [t.strip() for t in (data.get("topics") or [])
                   if isinstance(t, str) and t.strip()]
         if not topics:
