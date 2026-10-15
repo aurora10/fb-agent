@@ -133,10 +133,48 @@ def set_env(updates):
     os.chmod(ENV_PATH, 0o600)
 
 
+def post_tz():
+    """The site's posting timezone from POST_TZ, or None meaning this machine's.
+
+    Needed because the schedule is a wall-clock time in the AUDIENCE's timezone, not the
+    operator's. A 19:05 slot aimed at US readers must be 19:05 in New York, which is 01:05
+    the next day in Brussels — and the gap shifts twice a year, since Belgium and the US
+    change clocks on different dates. A fixed hour offset would drift.
+    """
+    name = (os.environ.get("POST_TZ") or "").strip()
+    if not name:
+        return None
+    try:
+        from zoneinfo import ZoneInfo
+        return ZoneInfo(name)
+    except Exception:
+        die(f"POST_TZ={name!r} is not a valid IANA timezone "
+            f"(try America/New_York, America/Chicago, America/Los_Angeles)")
+
+
+def post_at():
+    return os.environ.get("POST_AT") or "19:05"
+
+
+def post_every():
+    return int(os.environ.get("POST_EVERY") or 2)
+
+
 def local_ts(d, hhmm):
-    """Naive local date+time -> unix ts, using the machine's timezone (DST-safe)."""
+    """Naive date+time -> unix ts, in the site's POST_TZ (default: this machine)."""
     hh, mm = (int(x) for x in hhmm.split(":"))
+    tz = post_tz()
+    if tz:
+        return int(datetime(d.year, d.month, d.day, hh, mm, tzinfo=tz).timestamp())
     return int(datetime(d.year, d.month, d.day, hh, mm).astimezone().timestamp())
+
+
+def show_ts(ts):
+    """Format an epoch in the site's posting timezone, labelled."""
+    tz = post_tz()
+    if tz:
+        return datetime.fromtimestamp(ts, tz).strftime("%Y-%m-%d %H:%M") + f" {tz.key}"
+    return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") + " local"
 
 
 # ---------------------------------------------------------------- subcommands
@@ -321,12 +359,12 @@ def cmd_list():
             print(f"  GONE      {r['id']}  (deleted, or no longer visible)")
             continue
         ts = d.get("scheduled_publish_time") or r.get("scheduled")
-        when = datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") if ts else "-"
+        when = show_ts(ts) if ts else "-"
         state = "published" if d.get("is_published") else "SCHEDULED"
         text = (d.get("message") or r.get("text") or "").replace("\n", " ")[:50]
         print(f"  {state:9} {when:16} {r['id']}  {text}")
 
-    print("\nrecent published (times shown in your local timezone):")
+    print(f"\nrecent published (times shown in {post_tz().key if post_tz() else 'your local timezone'}):")
     pub = graph(f"{pid}/posts", {
         "fields": "id,message,created_time", "limit": "5", "access_token": tok,
     }, soft=True)
@@ -519,8 +557,8 @@ def cmd_schedule(argv):
     if not dry:
         (BASE / "done").mkdir(parents=True, exist_ok=True)   # gitignored: may not exist
     start = date.fromisoformat(opt("--start", (date.today() + timedelta(days=1)).isoformat()))
-    every = int(opt("--every", "2"))          # every 2nd day
-    at = opt("--at", "19:05")                 # matches this Page's existing cadence
+    every = int(opt("--every", str(post_every())))   # site default, else every 2nd day
+    at = opt("--at", post_at())                      # site default, else 19:05
     posts = sorted((BASE / "approved").glob("post_*.json"))
     if not posts:
         print("nothing in approved/ — run ./approve first")

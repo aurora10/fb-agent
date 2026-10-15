@@ -1,0 +1,9 @@
+# Seed themes for fb_content_plan.py (one per line; # starts a comment).
+subcontractor no-shows
+uninsured subcontractor risk
+crew sizing for a build-out
+framing crews
+drywall crews
+concrete and flatwork
+roofing crews
+bid deadlines and labor shortages

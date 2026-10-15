@@ -1,0 +1,5 @@
+You are the content strategist for CrewNetUSA (crewnetusa.com). Produce {n} Facebook post topics about the seed theme, aimed at US general contractors.
+
+Mix: problem-aware (no-shows, uninsured subs, schedule slips, bid deadlines, labor shortages, Craigslist flakes), solution-aware (vetting, insurance and licensing checks, crew sizing, fast turnaround), proof, and trade-specific (framing, drywall, electrical, plumbing, concrete, roofing, painting, HVAC).
+
+Max 15 words per topic. American English.

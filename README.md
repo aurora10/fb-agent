@@ -148,11 +148,38 @@ SITE=crewnetusa .venv/bin/python scripts/fb_plan.py --limit 14
 - **`SITE` unset means the repo root *is* the site** — the original single-Page layout, byte
   for byte. Nothing breaks if you never use this.
 
-Getting the second Page's token:
+The site `.env` also sets the cadence:
+
+```
+POST_TZ=America/New_York   # the AUDIENCE's timezone, not yours
+POST_AT=19:05
+POST_EVERY=2
+```
+
+`POST_TZ` matters more than it looks. `--at 19:05` is a wall clock in the **readers'**
+timezone, so without it a 19:05 slot aimed at US contractors would actually publish at
+13:05 New York time from a European machine. An IANA zone is used rather than an hour
+offset because Belgium and the US change clocks on different dates, so a fixed offset
+would drift twice a year:
+
+```
+POST_TZ=America/New_York, --at 19:05
+  2026-10-30 -> NY 19:05 EDT = 00:05 Brussels
+  2026-11-03 -> NY 19:05 EST = 01:05 Brussels
+```
+
+Leave `POST_TZ` unset to use the machine's own timezone, as before.
+
+Getting the second Page's token — same app, no new one:
 
 ```bash
-.venv/bin/python scripts/fb_api.py token 1357946317402134
+SITE=crewnetusa .venv/bin/python scripts/fb_api.py token 1357946317402134
+SITE=crewnetusa .venv/bin/python scripts/fb_api.py check
 ```
+
+Each site gets its own token. Page tokens are per Page, so the two are different strings
+even though they come from one app — `check` confirms which Page a site is pointed at,
+which is the thing to verify before scheduling anything.
 
 **No new app, and no App Review.** Page tokens are per Page, but the app is not — the app you
 already have reaches every Page you administer.

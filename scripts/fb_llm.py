@@ -173,8 +173,9 @@ def history_block(also_avoid=()):
             + "\n".join(f"- {t[:HOOK_CHARS].rstrip()}" for t in hooks)
         )
     else:
-        parts.append("(nog geen eerdere posts bekend — draai eerst: "
-                     ".venv/bin/python scripts/fb_api.py past-posts)")
+        parts.append("(No post history loaded. If this Page has published posts, run "
+                     "`fb_api.py past-posts` to load them. If it is a new Page, there is "
+                     "nothing to avoid yet.)")
 
     if also_avoid:
         parts.append("Al gepland maar nog niet gepubliceerd (ook vermijden):\n"
