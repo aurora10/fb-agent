@@ -69,6 +69,9 @@ def main(argv):
           + f" with {describe()}")
     ok = sum(render(num, prompt) for num, prompt in todo)
     print(f"done: {ok}/{len(todo)}")
+    if ok:
+        # The gallery is a snapshot, so new images are invisible until this runs again.
+        print("     run fb_preview.py to see them in the gallery")
 
 
 if __name__ == "__main__":

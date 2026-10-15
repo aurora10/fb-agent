@@ -13,14 +13,14 @@ def main():
         d = json.loads(f.read_text())
         num = f.stem.split("_")[1]
         img = (BASE / "images" / f"{num}.png")
-        img_html = f'<img src="../images/{num}.png">' if img.exists() else "<div class='noimg'>nog geen beeld</div>"
+        img_html = f'<img src="../images/{num}.png">' if img.exists() else "<div class='noimg'>no image yet</div>"
         cards.append(f"""
 <div class="card">
   <div class="num">draft_{num} — {html.escape(d.get('topic',''))}</div>
   {img_html}
   <details class="prompt"><summary>image_prompt</summary><pre class="ip">{html.escape(d.get('image_prompt',''))}</pre></details>
   <pre>{html.escape(d['post'])}</pre>
-  <div class="cmd">goedkeuren: <code>./approve {num}</code> · beeld opnieuw: <code>fb_regen_image.py {num} "..."</code></div>
+  <div class="cmd">approve: <code>./approve {num}</code> · redo image: <code>fb_regen_image.py {num} "..."</code></div>
 </div>""")
     (BASE / "previews/index.html").write_text(f"""<!doctype html><meta charset=utf-8><title>FB previews</title>
 <style>
@@ -34,7 +34,11 @@ pre{{white-space:pre-wrap;font-family:inherit;font-size:14px}}
 .prompt{{font-size:11px;color:#555;margin:6px 0}}
 .prompt .ip{{white-space:pre-wrap;background:#f6f6f8;padding:6px;border-radius:4px;font-size:11px}}
 </style>{''.join(cards)}""")
-    print(f"[ok] previews/index.html ({len(cards)} cards) — open in browser")
+    with_img = sum(1 for c in cards if "<img " in c)
+    print(f"[ok] previews/index.html ({len(cards)} cards, {with_img} with an image) — open in browser")
+    if cards and not with_img:
+        print("[..] no images yet. After `fb_images.py`, re-run this to embed them — "
+              "the gallery is a snapshot taken when it runs.")
 
 if __name__ == "__main__":
     main()

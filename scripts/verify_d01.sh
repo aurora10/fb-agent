@@ -28,8 +28,19 @@ grep -q "FB previews" "$T/previews/index.html"
 echo "-- preview renders with 1 draft + approve hint"
 mkdir -p "$T/drafts"          # fixture: fb_plan.py creates this itself when it writes a draft
 printf '{"post":"testpost","image_prompt":"x","topic":"t","status":"draft"}\n' > "$T/drafts/draft_01.json"
-(cd "$T" && "$V" scripts/fb_preview.py) | grep -q "(1 cards)"
+out="$(cd "$T" && "$V" scripts/fb_preview.py)"
+grep -q "1 cards" <<<"$out"
+# No image yet, so the gallery must say so rather than silently showing none
+grep -q "0 with an image" <<<"$out"
+grep -q "no images yet" <<<"$out"
 grep -q "./approve 01" "$T/previews/index.html"
+# ...and once an image exists, the count and the embedding must both follow
+mkdir -p "$T/images"          # fixture: as if fb_images.py had just run
+: > "$T/images/01.png"
+out="$(cd "$T" && "$V" scripts/fb_preview.py)"
+grep -q "1 with an image" <<<"$out"
+grep -q '<img src="../images/01.png">' "$T/previews/index.html"
+grep -q '<img ' "$T/previews/index.html"
 
 echo "-- export guard: nothing approved exits cleanly"
 (cd "$T" && "$V" scripts/fb_export_csv.py 2030-01-01 2) | grep -q "nothing approved"
