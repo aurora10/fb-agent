@@ -541,6 +541,32 @@ else
   echo "   !! a failed run would exit 0; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
+echo "-- check-dupes: flags a repeated post, passes distinct ones (lexical, offline)"
+out="$(cd "$T" && "$V" - <<'PROBE'
+import json, os, pathlib, subprocess, sys
+
+os.makedirs("approved", exist_ok=True)
+os.makedirs("done", exist_ok=True)
+same = ("Screened crews with correct A1 and Limosa paperwork start on site quickly. "
+        "A wrong hire costs time, rework and delay on every following trade.")
+json.dump({"post": same, "topic": "t"}, open("approved/post_01.json", "w"))
+json.dump({"post": same, "topic": "t"}, open("approved/post_02.json", "w"))   # identical
+json.dump({"post": "Roofing crews in Flanders: what to check before the first day on a "
+                   "sloped roof, and how weather windows shape the schedule.",
+           "topic": "t"}, open("approved/post_03.json", "w"))
+r = subprocess.run([sys.executable, "scripts/fb_check_dupes.py", "--lexical-only"],
+                   capture_output=True, text=True)
+flagged = "post_01" in r.stdout and "post_02" in r.stdout
+distinct_clean = "post_03" not in r.stdout
+print(f"FLAGGED={flagged} DISTINCT_CLEAN={distinct_clean} EXIT={r.returncode}")
+PROBE
+)"
+if grep -q "FLAGGED=True DISTINCT_CLEAN=True EXIT=1" <<<"$out"; then
+  echo "   ok: duplicate flagged, distinct post left alone, exit 1"
+else
+  echo "   !! check-dupes misbehaved; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- command hints are runnable, not bare script names"
 out="$(cd "$T" && "$V" - <<'PROBE'
 import pathlib, re

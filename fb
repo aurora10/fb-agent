@@ -40,6 +40,7 @@ commands:
   test-post [--now]     create a test post
   restyle-prompts       rewrite draft prompts to scene-only
   fix-cta [--dry-run]   replace an improvised CTA with the pinned one
+  check-dupes [opts]    report near-duplicate posts (--threshold, exits 1 if any)
   export-csv            fallback: Business Suite bulk-upload CSV
   verify                offline test suite (no network, no spend)
   run SCRIPT [args]     run any script in scripts/ directly
@@ -93,6 +94,7 @@ case "$CMD" in
                exec "$PY" scripts/fb_api.py "$CMD" "$@" ;;
   restyle-prompts) exec "$PY" scripts/fb_restyle_prompts.py "$@" ;;
   fix-cta)     exec "$PY" scripts/fb_fix_cta.py "$@" ;;
+  check-dupes) exec "$PY" scripts/fb_check_dupes.py "$@" ;;
   export-csv)  exec "$PY" scripts/fb_export_csv.py "$@" ;;
   verify)      exec bash scripts/verify_d01.sh "$@" ;;
   run)

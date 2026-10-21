@@ -437,6 +437,22 @@ a prompt is otherwise unrecoverable.
 
 Moves those to `approved/`. Anything you skip stays in `drafts/` and is never published.
 
+### Before approving — check for repetition
+
+An LLM asked for ten post topics on one narrow offer will produce ten variations of the same
+point, and nothing else in the pipeline notices. Run this first:
+
+```bash
+./fb root check-dupes
+```
+
+Two passes: word overlap (catches near-copies) and one model call that asks whether any two
+posts make the *same argument* — which is what a paraphrase hides from any word count. The
+first pair it caught scored only 33% word overlap, so the lexical check alone would miss it.
+
+Exits 1 when it finds anything, so it can gate a scripted run. `--lexical-only` skips the
+model call.
+
 ## Step 6 — Preview the schedule (nothing is sent)
 
 ```bash
@@ -557,6 +573,7 @@ write over an existing draft rather than trusting the arithmetic.
 | `fb_images.py [NN...]` | generate images (all drafts, or just the numbers given) |
 | `fb_restyle_prompts.py [NN...]` | rewrite draft prompts to scene-only (drops style wording) |
 | `fb_fix_cta.py [NN...] [--dry-run]` | replace an improvised CTA in existing posts with the pinned one |
+| `check-dupes [--threshold N] [--lexical-only]` | report posts that make the same point; exits 1 if any |
 | `fb_imagegen.py` | shared provider layer for image generation — OpenAI GPT Image or Pollinations. Imported by the two scripts above; not run directly |
 | `fb_regen_image.py NN ["prompt"] [--edit-only\|--revert]` | reword a prompt, redo one image, or undo |
 | `fb_preview.py` | build the review gallery (shows image_prompt per draft) |
