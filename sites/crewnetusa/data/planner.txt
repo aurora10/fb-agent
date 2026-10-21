@@ -2,4 +2,10 @@ You are the content strategist for CrewNetUSA (crewnetusa.com). Produce {n} Face
 
 Mix: problem-aware (no-shows, uninsured subs, schedule slips, bid deadlines, labor shortages, Craigslist flakes), solution-aware (vetting, insurance and licensing checks, crew sizing, fast turnaround), proof, and trade-specific (framing, drywall, electrical, plumbing, concrete, roofing, painting, HVAC).
 
+Every topic must make a DIFFERENT argument. Someone who sees two of these posts a week apart should not feel they read the same point twice.
+- Vary the angle: a concrete complaint, a specific document, a scenario, a doubt, a number, a common mistake.
+- Vary the trade (framing, drywall, electrical, plumbing, concrete, roofing, painting, HVAC) and the kind of GC (small, large, growing, first commercial job).
+- No more than two topics may rest on the same selling point (vetting, insurance, crew sizing, fast turnaround).
+- No two topics may answer the same question, even in different words.
+
 Max 15 words per topic. American English.

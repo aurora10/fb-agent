@@ -245,20 +245,25 @@ Page. **For another Page, swap that word:** `./fb crewnetusa plan --limit 14`.
 ### The whole flow at a glance
 
 ```bash
-./fb root check                                   # 0. right Page? token alive?
-./fb root past-posts                              #    load what you have published
-./fb root topics "gevelrenovatie" "testweek"      # 1. propose topics -> data/topics.txt
-#                                                  #    (edit that file: delete what you don't want)
-./fb root plan --limit 14                         # 2. write posts + image prompts -> drafts/
-./fb root gallery          # prints the exact path to open     # 3. review copy AND prompts  <- before images
-./fb root images                                  # 4. render images
-./fb root gallery          # prints the exact path to open     # 5. review the images
-./fb root approve 1 2 3 4 5                       # 6. approve what goes out
-./fb root schedule --dry-run --start 2026-11-01   # 7. see the plan, send nothing
-./fb root schedule --start 2026-11-01             # 8. schedule it
-./fb root list                                    # 9. confirm the queue
-./fb root preview                                 # 10. as Facebook will render them
+./fb root check                      # 0. right Page? token alive?
+./fb root past-posts                 #    load what you have published
+./fb root topics "gevelrenovatie" "dakrenovatie"    # 1. topics -> data/topics.txt
+#                                    #    (edit that file: delete what you don't want)
+./fb root plan --limit 14            # 2. write posts + image prompts -> drafts/
+./fb root gallery                    # 3. review copy AND prompts  <- before images
+./fb root images                     # 4. render images
+./fb root gallery                    # 5. review the images
+./fb root check-dupes                # 6. do any two posts make the same point?  <- gate
+./fb root approve 1 2 3 4 5          # 7. approve what goes out
+./fb root schedule --dry-run --start 2026-11-01   # 8. see the plan, send nothing
+./fb root schedule --start 2026-11-01             # 9. schedule it
+./fb root list                       # 10. confirm the queue
+./fb root preview                    # 11. as Facebook will render them
 ```
+
+`gallery` and `preview` print the exact file to open. For a secondary Page that is
+`sites/<name>/previews/…` — opening `previews/index.html` gives you the **first** Page's
+gallery, which is a different and often empty file.
 
 `./fb` with no arguments lists every command, and `./fb sites` lists the Pages you can post
 to. The long form — `SITE=<site> .venv/bin/python scripts/<script>` — still works and is
@@ -437,7 +442,7 @@ a prompt is otherwise unrecoverable.
 
 Moves those to `approved/`. Anything you skip stays in `drafts/` and is never published.
 
-### Before approving — check for repetition
+### Step 6 in detail — what the repetition gate catches
 
 An LLM asked for ten post topics on one narrow offer will produce ten variations of the same
 point, and nothing else in the pipeline notices. Run this first:
@@ -452,6 +457,22 @@ first pair it caught scored only 33% word overlap, so the lexical check alone wo
 
 Exits 1 when it finds anything, so it can gate a scripted run. `--lexical-only` skips the
 model call.
+
+**This is a gate, not a formality.** The first runs on real batches found 15 pairs across 13
+Constructief posts, 22 across 14 CrewNetUSA posts and 4 across 11 Russian posts. Each pair
+publishes two days apart, so a reader sees the same argument twice in a week.
+
+Two levers reduce it, and they are not equally strong:
+
+- **`data/planner.txt` demands angle variety** — a different trade, objection and kind of
+  proof per topic, and no more than two topics resting on one selling point. Measured on a
+  single seed: the same six posts went from **6 duplicate pairs to 3**.
+- **Diverse seeds matter more.** One narrow seed ("insurance checks") yields ten posts about
+  insurance checks however the planner is worded. Seed with different problems, trades or
+  audiences instead of ten variations on one theme.
+
+Use the gate for what the planner cannot fix: read what it flags, keep the better post of
+each pair, and let the rest go.
 
 ## Step 6 — Preview the schedule (nothing is sent)
 
@@ -587,13 +608,13 @@ write over an existing draft rather than trusting the arithmetic.
 | Path | What |
 | --- | --- |
 | `data/persona.txt` | brand, output language and tone — the writer brief |
-| `data/planner.txt` | the topic-strategist brief for `fb_content_plan.py` |
+| `data/planner.txt` | the topic-strategist brief for `fb_content_plan.py`; it demands a different angle, trade and kind of proof per topic |
 | `data/context.txt` | your positioning, injected into every post prompt |
 | `shared/image_style.txt` | the house visual style, appended to every image prompt (shared by all sites) |
 | `data/cta.txt` | the fixed call-to-action, appended to every post |
 | `data/topics.txt` | topic queue (one per line) — fed by you or `fb_content_plan.py` |
 | `data/past_posts.txt` | published history, newest first — synced by `fb_api.py past-posts` (gitignored) |
-| `data/seeds.txt` | seed themes for `fb_content_plan.py` (one per line, `#` comments) |
+| `data/seeds.txt` | seed themes for `fb_content_plan.py` (one per line, `#` comments). **Vary them** — one narrow seed produces ten posts on that one theme |
 | `drafts/` → `approved/` → `done/` | post lifecycle |
 | `done/scheduled_posts.json` | local ledger of scheduled post ids |
 | `.env` | keys and tokens (gitignored, chmod 600) |
