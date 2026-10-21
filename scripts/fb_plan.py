@@ -61,7 +61,10 @@ def plan(topics):
                      f"for a numbering clash")
         data = ask(cl, system, (
             f"Write a Facebook post about this topic: {topic}\n\n"
-            "Also return an image_prompt in English describing ONLY THE SCENE: which objects, "
+            "Also return an image_prompt describing ONLY THE SCENE: which objects, "
+            "people, materials and actions are visible, and the composition. The image_prompt "
+            "MUST be written in ENGLISH and only in ENGLISH — translate any trade terms rather "
+            "than leaving words in the post's language. Which objects, "
             "people, materials and actions are visible, and the composition. Do NOT describe "
             "style, lighting, colours, camera angle or rendering — the visual style comes from "
             "a separate fixed style prompt and must not be contradicted. Never use "

@@ -62,7 +62,7 @@ def main(args):
             print(f"[..] {seed}: model returned no topics")
             continue
         proposed += topics
-        print(f"[ok] {seed}: {len(topics)} onderwerpen")
+        print(f"[ok] {seed}: {len(topics)} topic(s)")
 
     # A prompt instruction alone does not stop paraphrases: re-running the same seed produced
     # "Personeelstekort op het dak" alongside an existing "Personeel tekort op het dak?".
@@ -70,21 +70,21 @@ def main(args):
     # filter in a second, focused pass.
     if queued and proposed:
         keep = ask(cl, (
-            "Je filtert dubbele content-onderwerpen. Antwoord alleen met JSON."
+            "You filter duplicate content topics. Reply with JSON only."
         ), (
-            "Bestaande onderwerpen (already planned):\n"
+            "Already planned topics:\n"
             + "\n".join(f"- {t}" for t in queued[-150:])
-            + "\n\nNieuwe kandidaten:\n"
+            + "\n\nNew candidates:\n"
             + "\n".join(f"- {t}" for t in proposed)
-            + "\n\nVerwijder elke kandidaat die inhoudelijk hetzelfde is als een bestaand "
-              "onderwerp (ook als de woorden verschillen), en elke kandidaat die dubbel is "
-              "met een eerdere kandidaat. Behoud de originele formulering.\n"
+            + "\n\nDrop every candidate that means the same as an already-planned topic "
+              "(even when the wording differs), and any candidate that duplicates an earlier "
+              "one. Keep the original wording of what you retain.\n"
               'JSON: {"keep": ["...", ...]}'
         )).get("keep")
         if isinstance(keep, list) and all(isinstance(k, str) for k in keep):
             dropped = len(proposed) - len(keep)
             if dropped > 0:
-                print(f"[ok] filter: {dropped} bijna-dubbele onderwerpen verwijderd")
+                print(f"[ok] filter: dropped {dropped} near-duplicate topic(s)")
             proposed = [k.strip() for k in keep if k.strip()]
 
     # Backstop for literal repeats the filter may have let through.
@@ -100,10 +100,10 @@ def main(args):
     if add:
         with tf.open("a") as fh:
             fh.write("".join(t + "\n" for t in add))
-        print(f"[ok] data/topics.txt += {len(add)} nieuwe (totaal {len(queued) + len(add)})"
-              + (f" — {dupes} duplicaten overgeslagen" if dupes else ""))
+        print(f"[ok] data/topics.txt += {len(add)} new (total {len(queued) + len(add)})"
+              + (f" — {dupes} duplicate(s) skipped" if dupes else ""))
     else:
-        print("[..] geen nieuwe unieke onderwerpen" + (f" ({dupes} duplicaten)" if dupes else ""))
+        print("[..] no new unique topics" + (f" ({dupes} duplicate(s))" if dupes else ""))
 
 
 if __name__ == "__main__":
