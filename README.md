@@ -250,9 +250,9 @@ Page. **For another Page, swap that word:** `./fb crewnetusa plan --limit 14`.
 ./fb root topics "gevelrenovatie" "testweek"      # 1. propose topics -> data/topics.txt
 #                                                  #    (edit that file: delete what you don't want)
 ./fb root plan --limit 14                         # 2. write posts + image prompts -> drafts/
-./fb root gallery && open previews/index.html     # 3. review copy AND prompts  <- before images
+./fb root gallery          # prints the exact path to open     # 3. review copy AND prompts  <- before images
 ./fb root images                                  # 4. render images
-./fb root gallery && open previews/index.html     # 5. review the images
+./fb root gallery          # prints the exact path to open     # 5. review the images
 ./fb root approve 1 2 3 4 5                       # 6. approve what goes out
 ./fb root schedule --dry-run --start 2026-11-01   # 7. see the plan, send nothing
 ./fb root schedule --start 2026-11-01             # 8. schedule it

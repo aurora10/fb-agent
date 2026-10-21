@@ -4,7 +4,7 @@ import html, json, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import BASE, fb_cmd   # honours SITE / sites/<name>
+from fb_llm import BASE, REPO, fb_cmd   # honours SITE / sites/<name>
 
 def main():
     (BASE / "previews").mkdir(parents=True, exist_ok=True)
@@ -35,7 +35,15 @@ pre{{white-space:pre-wrap;font-family:inherit;font-size:14px}}
 .prompt .ip{{white-space:pre-wrap;background:#f6f6f8;padding:6px;border-radius:4px;font-size:11px}}
 </style>{''.join(cards)}""")
     with_img = sum(1 for c in cards if "<img " in c)
-    print(f"[ok] previews/index.html ({len(cards)} cards, {with_img} with an image) — open in browser")
+    out = BASE / "previews" / "index.html"
+    try:
+        rel = out.relative_to(REPO)
+    except ValueError:
+        rel = out
+    # Print the path from the repo root: "previews/index.html" alone silently opens the
+    # ROOT site's gallery, which is a different (often empty) file.
+    print(f"[ok] {rel} ({len(cards)} cards, {with_img} with an image)")
+    print(f"     open {rel}")
 
     if not cards:
         # An empty gallery after scheduling is normal, but reads like a failure. The file is
