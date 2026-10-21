@@ -22,7 +22,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import BASE, fb_cmd   # honours SITE / sites/<name>
+from fb_llm import BASE, REPO, fb_cmd   # honours SITE / sites/<name>
 ENV_PATH = BASE / ".env"
 LEDGER = BASE / "done" / "scheduled_posts.json"   # local record of posts we scheduled
 API = "https://graph.facebook.com/v26.0"  # pinned: v18/v19/v20 are already dead
@@ -554,9 +554,13 @@ def cmd_preview(argv):
     title = f"{len(ids) - missing} post(s) as Facebook will render them"
     out.write_text(PAGE_HTML.replace("__TITLE__", _esc(title))
                             .replace("__CARDS__", "".join(cards)))
-    print(f"[ok] {out.relative_to(BASE)}: {len(ids) - missing} post(s) rendered"
+    try:
+        rel = out.relative_to(REPO)
+    except ValueError:
+        rel = out
+    print(f"[ok] {rel}: {len(ids) - missing} post(s) rendered"
           + (f", {missing} unreadable" if missing else ""))
-    print("     open with: open previews/scheduled.html")
+    print(f"     open {rel}")
 
 
 def cmd_schedule(argv):
