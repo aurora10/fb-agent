@@ -598,6 +598,11 @@ order. Tracked under `data/` are only `context.txt`, `topics.txt` and `seeds.txt
 - **`GET /{page-id}/feed` is blocked** with Standard Access (error `#10`) even though the
   token has `pages_read_engagement` — that edge includes *other people's* posts. Use
   `/{page-id}/posts`. Meta's own docs get this wrong.
+- **"API access blocked" (code 200) is usually KYC, not a ban.** If a call made with an *app*
+  access token (`app_id|app_secret`) fails, the problem sits above the token — an unfinished
+  identity check on the Facebook account. It presents exactly like an app restriction, so
+  check identity verification before hunting the dashboard. Scheduled posts keep publishing
+  through it, because Meta publishes them server-side. See `docs/meta-api-setup.md`.
 - **No API edge lists scheduled posts.** The tooling keeps a local ledger and verifies each
   id against the API, so don't delete `done/scheduled_posts.json`.
 - **`images/NN.png` are actually JPEG data** — `OPENAI_IMAGE_FORMAT=jpeg` by default, and

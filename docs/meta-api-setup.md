@@ -371,6 +371,34 @@ creating a new app from scratch.
 Publishing itself: untouched. **No documented change to `POST /{page-id}/feed` publishing
 semantics anywhere in the v23–v26 changelogs.**
 
+### ⚠️ KYC blocks everything, and looks like a ban
+
+If every call starts failing with this, the app is not necessarily restricted:
+
+```
+{"error":{"message":"API access blocked.","type":"OAuthException","code":200,
+          "fbtrace_id":"..."}}
+```
+
+**This is what an incomplete identity/KYC check on the Facebook account looks like.** It is
+worth checking first, because it presents as an app-level block and sends you hunting through
+the App Dashboard for a restriction that isn't there.
+
+How to tell it apart from a real token problem:
+
+| Call | If KYC is pending | If the token is the problem |
+| --- | --- | --- |
+| `debug_token` with `app_id\|app_secret` | **fails, code 200** | works |
+| `GET /{page-id}` with a Page token | fails, code 200 or 190 | fails with code 190 only |
+
+An app access token needs no user and no Page. **If that call fails, the problem is above the
+token** — the account or the app, never the token. Completing the identity check restores
+access immediately; no new token is needed, and previously scheduled posts keep publishing
+throughout because Meta publishes them server-side.
+
+Keep the `fbtrace_id`: Meta support asks for it, and it is the only identifier that ties the
+failure to their logs.
+
 ### Token failures are silent by design
 
 From Meta's error-handling doc: "**Facebook will not notify you that an access token has

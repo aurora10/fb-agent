@@ -177,6 +177,17 @@ def show_ts(ts):
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M") + " local"
 
 
+def show_dt(dt):
+    """Format an aware datetime in the site's posting timezone.
+
+    Used for created_time, which arrives as UTC. Converting it with bare .astimezone()
+    gives the OPERATOR's zone, so on a US site the header would say America/New_York
+    while the rows underneath were in Brussels time.
+    """
+    tz = post_tz()
+    return dt.astimezone(tz if tz else None).strftime("%Y-%m-%d %H:%M")
+
+
 # ---------------------------------------------------------------- subcommands
 
 def cmd_check():
@@ -373,7 +384,7 @@ def cmd_list():
     for p in (pub or {}).get("data", []):
         # created_time is UTC; convert or the displayed hour is misleading.
         try:
-            when = datetime.fromisoformat(p["created_time"]).astimezone().strftime("%Y-%m-%d %H:%M")
+            when = show_dt(datetime.fromisoformat(p["created_time"]))
         except (KeyError, ValueError):
             when = "?"
         print(f"  {when:16} {p['id']}  "
