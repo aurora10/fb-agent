@@ -15,7 +15,7 @@ import json, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import BASE, ask, client
+from fb_llm import BASE, ask, client, fb_cmd
 
 STYLE_SNIPPET = 400     # how much of the style file to show the model as context
 
@@ -26,7 +26,7 @@ def targets(argv):
     out = []
     for a in argv:
         if not a.isdigit():
-            sys.exit(f"error: {a!r} is not a draft number (try: fb_restyle_prompts.py 5 6)")
+            sys.exit(f"error: {a!r} is not a draft number (try: {fb_cmd('restyle-prompts', 5, 6)})")
         f = BASE / "drafts" / f"draft_{int(a):02d}.json"
         if not f.exists():
             sys.exit(f"error: {f} does not exist")
@@ -37,7 +37,7 @@ def targets(argv):
 def main(argv):
     files = targets(argv)
     if not files:
-        sys.exit("error: no drafts found — run fb_plan.py first")
+        sys.exit(f"error: no drafts found — run {fb_cmd('plan')} first")
 
     cl = client()
     from fb_imagegen import style
@@ -84,7 +84,7 @@ def main(argv):
 
     print(f"\nrewrote {changed} of {len(files)} prompt(s)")
     if changed:
-        print("undo one with: fb_regen_image.py NN --revert")
+        print(f"undo one with: {fb_cmd('regen', 'NN', '--revert')}")
 
 
 if __name__ == "__main__":

@@ -12,7 +12,7 @@ import json, sys, time
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import (BASE, ask, client, compose_post, data_file, history_block,
+from fb_llm import (BASE, ask, client, compose_post, data_file, fb_cmd, history_block,
                     show_models, strip_tags)
 
 PERSONA = data_file("persona.txt")     # brand + language + tone; per site
@@ -115,7 +115,7 @@ if __name__ == "__main__":
     else:
         queued = queued_topics()
         if not queued:
-            sys.exit("error: data/topics.txt is empty — run fb_content_plan.py first")
+            sys.exit(f"error: data/topics.txt is empty — run {fb_cmd('topics')} first")
 
         if limit and limit < len(queued):
             print(f"[..] queue holds {len(queued)}; taking the first {limit}, "
@@ -138,4 +138,4 @@ if __name__ == "__main__":
         remaining = len(queued) - len(taken)
         print(f"[ok] data/topics.txt: {remaining} topic(s) left in the queue")
         if remaining:
-            print(f"     next batch: fb_plan.py --limit {min(BATCH_HINT, remaining)}")
+            print(f"     next batch: {fb_cmd('plan', '--limit', min(BATCH_HINT, remaining))}")

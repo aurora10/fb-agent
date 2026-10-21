@@ -22,7 +22,7 @@ from pathlib import Path
 from dotenv import load_dotenv
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import BASE   # honours SITE / sites/<name>
+from fb_llm import BASE, fb_cmd   # honours SITE / sites/<name>
 ENV_PATH = BASE / ".env"
 LEDGER = BASE / "done" / "scheduled_posts.json"   # local record of posts we scheduled
 API = "https://graph.facebook.com/v26.0"  # pinned: v18/v19/v20 are already dead
@@ -285,7 +285,7 @@ def cmd_token(argv):
     else:
         print("you administer several Pages — pass the id (or set FB_PAGE_ID), then re-run:")
         for p in pages:
-            print(f"  ./scripts/fb_api.py token {p['id']}    # {p['name']}")
+            print(f"  {fb_cmd('token', p['id'])}    # {p['name']}")
         return
 
     p = match[0]
@@ -296,7 +296,7 @@ def cmd_token(argv):
     print("the Page token has no expiry; it only dies on password change / de-authorization.")
     print("FB_LONG_USER_TOKEN was kept (~60 days) so switching Pages needs no new Explorer token;")
     print("delete that line if you'd rather not store a user-scoped secret.")
-    print("next: ./scripts/fb_api.py check")
+    print(f"next: {fb_cmd('check')}")
 
 
 def post_id_for(res, tok):
@@ -331,7 +331,7 @@ def cmd_test_post(argv):
         ledger_note(res["id"], ts, msg)
         print(f"scheduled for {datetime.fromtimestamp(ts).isoformat()}")
         print(f"post id: {res['id']}")
-    print("verify: ./scripts/fb_api.py list    delete: ./scripts/fb_api.py cancel <post-id>")
+    print(f"verify: {fb_cmd('list')}    delete: {fb_cmd('cancel', '<post-id>')}")
 
 
 def ledger_load():
@@ -437,7 +437,7 @@ def cmd_past_posts(argv):
     if rows:
         print(f"     newest {rows[0].get('created_time', '')[:10]} "
               f"→ oldest {rows[-1].get('created_time', '')[:10]}")
-        print(f"     fb_plan.py sends the {min(10, len(rows))} newest in full, plus a "
+        print(f"     the planner sends the {min(10, len(rows))} newest in full, plus a "
               f"{min(400, len(rows))}-post angle digest")
 
 
@@ -614,7 +614,7 @@ def cmd_schedule(argv):
         print("\n--dry-run: nothing sent, nothing moved")
     else:
         print(f"\nscheduled {len(posts)} post(s); moved to done/")
-        print("confirm with: ./scripts/fb_api.py list")
+        print(f"confirm with: {fb_cmd('list')}")
 
 
 if __name__ == "__main__":

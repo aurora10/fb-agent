@@ -12,7 +12,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fb_imagegen import describe, generate
-from fb_llm import BASE   # honours SITE / sites/<name>
+from fb_llm import BASE, fb_cmd   # honours SITE / sites/<name>
 
 
 def wanted(argv):
@@ -22,7 +22,7 @@ def wanted(argv):
     nums = set()
     for a in argv:
         if not a.isdigit():
-            sys.exit(f"error: {a!r} is not a draft number (try: fb_images.py 4 7)")
+            sys.exit(f"error: {a!r} is not a draft number (try: {fb_cmd('images', 4, 7)})")
         nums.add(f"{int(a):02d}")
     return nums
 
@@ -77,7 +77,7 @@ def main(argv):
     print(f"done: {ok}/{len(todo)}")
     if ok:
         # The gallery is a snapshot, so new images are invisible until this runs again.
-        print("     run fb_preview.py to see them in the gallery")
+        print(f"     run {fb_cmd('gallery')} to see them in the gallery")
 
 
 if __name__ == "__main__":

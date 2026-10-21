@@ -4,7 +4,7 @@ import html, json, sys
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
-from fb_llm import BASE   # honours SITE / sites/<name>
+from fb_llm import BASE, fb_cmd   # honours SITE / sites/<name>
 
 def main():
     (BASE / "previews").mkdir(parents=True, exist_ok=True)
@@ -44,10 +44,10 @@ pre{{white-space:pre-wrap;font-family:inherit;font-size:14px}}
         print("[..] no drafts to review — drafts/ is empty.")
         if scheduled:
             print(f"     {scheduled} post(s) are in done/, i.e. already scheduled. To see the queue:")
-            print("       fb_api.py list        what is scheduled")
-            print("       fb_api.py preview     render them as Facebook will")
+            print(f"       {fb_cmd('list')}")
+            print(f"       {fb_cmd('preview')}")
     elif not with_img:
-        print("[..] no images yet. After `fb_images.py`, re-run this to embed them — "
+        print(f"[..] no images yet. After `{fb_cmd('images')}`, re-run this to embed them — "
               "the gallery is a snapshot taken when it runs.")
 
 if __name__ == "__main__":

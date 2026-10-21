@@ -508,6 +508,29 @@ else
   echo "   !! no guidance when history is missing; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
+echo "-- command hints are runnable, not bare script names"
+out="$(cd "$T" && "$V" - <<'PROBE'
+import pathlib, re
+
+pat = re.compile(r'["\'][^"\']*\bfb_[a-z_]+\.py\b')
+bad = []
+for f in sorted(pathlib.Path("scripts").glob("*.py")):
+    for i, line in enumerate(f.read_text().splitlines(), 1):
+        st = line.strip()
+        if "fb_cmd" in line or st.startswith("#"):
+            continue
+        if ("print(" in line or "sys.exit(" in line) and pat.search(line):
+            bad.append(f"{f.name}:{i}: {st[:70]}")
+assert not bad, "hints naming a bare script (use fb_cmd):\n" + "\n".join(bad)
+print("HINTS=ok")
+PROBE
+)"
+if grep -q "HINTS=ok" <<<"$out"; then
+  echo "   ok: hints print a runnable ./fb command"
+else
+  echo "   !! a hint would fail with 'command not found'; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- no stale absolute paths"
 # --exclude self: this check's own pattern would otherwise match itself.
 # --exclude-dir __pycache__: stale bytecode can hold strings the source no longer has.

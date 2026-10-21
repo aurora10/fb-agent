@@ -66,6 +66,16 @@ def model():
     return os.environ.get("OPENAI_MODEL") or DEFAULT_MODEL
 
 
+def fb_cmd(*args):
+    """A runnable ./fb command for the active site, for use in hints.
+
+    Hints used to name a bare script ("run fb_preview.py"), which is not a command — it
+    fails with "command not found". Build the real invocation instead, so what the tool
+    prints can be pasted straight into the shell.
+    """
+    return " ".join(["./fb", SITE or "root"] + [str(a) for a in args])
+
+
 def data_file(name):
     """Site data/<name>, falling back to shared/<name>, else ''.
 
@@ -184,8 +194,8 @@ def history_block(also_avoid=()):
         )
     else:
         parts.append("(No post history loaded. If this Page has published posts, run "
-                     "`fb_api.py past-posts` to load them. If it is a new Page, there is "
-                     "nothing to avoid yet.)")
+                     f"`{fb_cmd('past-posts')}` to load them. If it is a new Page, there "
+                     "is nothing to avoid yet.)")
 
     if also_avoid:
         parts.append("Al gepland maar nog niet gepubliceerd (ook vermijden):\n"

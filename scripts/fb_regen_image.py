@@ -16,6 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 from fb_imagegen import describe, generate
+from fb_llm import fb_cmd
 
 from fb_llm import BASE   # honours SITE / sites/<name>
 IMAGES = BASE / "images"
@@ -28,7 +29,7 @@ def main(argv):
     try:
         num = f"{int(argv[0]):02d}"
     except ValueError:
-        sys.exit(f"error: {argv[0]!r} is not a draft number (try: fb_regen_image.py 03)")
+        sys.exit(f"error: {argv[0]!r} is not a draft number (try: {fb_cmd('regen', '03')})")
 
     edit_only = "--edit-only" in argv
     revert = "--revert" in argv
@@ -40,7 +41,7 @@ def main(argv):
 
     f = BASE / "drafts" / f"draft_{num}.json"
     if not f.exists():
-        sys.exit(f"error: {f} does not exist — run fb_plan.py first, or check the number")
+        sys.exit(f"error: {f} does not exist — run {fb_cmd('plan')} first, or check the number")
 
     d = json.loads(f.read_text())
     old = d.get("image_prompt", "")
@@ -69,7 +70,7 @@ def main(argv):
     if edit_only:
         print(f"[ok] draft_{num}.json prompt updated (no image generated)")
         if prompt != old and old:
-            print(f"     previous prompt kept — undo with: fb_regen_image.py {num} --revert")
+            print(f"     previous prompt kept — undo with: {fb_cmd('regen', num, '--revert')}")
         return
 
     IMAGES.mkdir(parents=True, exist_ok=True)
@@ -87,7 +88,7 @@ def main(argv):
         backup.unlink(missing_ok=True)
         img.rename(backup)
     img.write_bytes(data)
-    print(f"[ok] {img.name} ({len(data) // 1024} KB) — rerun fb_preview.py")
+    print(f"[ok] {img.name} ({len(data) // 1024} KB) — rerun {fb_cmd('gallery')}")
 
 
 if __name__ == "__main__":
