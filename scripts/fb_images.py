@@ -74,10 +74,16 @@ def main(argv):
           + (f", {skipped} already present" if skipped else "")
           + f" with {describe()}")
     ok = sum(render(num, prompt) for num, prompt in todo)
+    failed = len(todo) - ok
     print(f"done: {ok}/{len(todo)}")
     if ok:
         # The gallery is a snapshot, so new images are invisible until this runs again.
         print(f"     run {fb_cmd('gallery')} to see them in the gallery")
+    if failed:
+        # Exit non-zero: a run where every image failed used to end with status 0 and a
+        # tidy "done: 0/11", which reads like success and hides an empty images/.
+        print(f"[!!] {failed} image(s) FAILED and were not written — see the lines above")
+        sys.exit(1)
 
 
 if __name__ == "__main__":

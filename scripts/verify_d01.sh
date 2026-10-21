@@ -153,8 +153,10 @@ fi
 
 echo "-- fb_plan: numbers new drafts from max+1, so pruning cannot cause an overwrite"
 rm -f "$T"/drafts/draft_*.json
-printf 'x\n' > "$T/drafts/draft_04.json"
-printf 'x\n' > "$T/drafts/draft_07.json"
+# valid JSON, not a bare marker: this test only needs the filenames, but anything that
+# parses drafts afterwards would trip over a non-JSON fixture.
+printf '{"post":"t","image_prompt":"p","topic":"t","status":"draft"}\n' > "$T/drafts/draft_04.json"
+printf '{"post":"t","image_prompt":"p","topic":"t","status":"draft"}\n' > "$T/drafts/draft_07.json"
 out="$(cd "$T" && "$V" - <<'PY'
 import sys
 sys.path.insert(0, "scripts")
@@ -506,6 +508,33 @@ if grep -q "past-posts" <<<"$out"; then
   echo "   ok: points at fb_api.py past-posts"
 else
   echo "   !! no guidance when history is missing; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- fb_images: a failed render exits non-zero instead of looking successful"
+out="$("$V" - "$T" <<'PROBE'
+import importlib.util, sys
+T = sys.argv[1]
+sys.path.insert(0, T + "/scripts")
+import fb_imagegen
+fb_imagegen.generate = lambda prompt, log=print: None      # every render fails
+spec = importlib.util.spec_from_file_location('i', T + "/scripts/fb_images.py")
+m = importlib.util.module_from_spec(spec); spec.loader.exec_module(m)
+# isolate: clear leftovers from earlier tests so only our fixture is read
+import pathlib
+for f in pathlib.Path(T + "/drafts").glob("*.json"):
+    f.unlink()
+open(T + "/drafts/draft_07.json", "w").write('{"post":"x","image_prompt":"p","topic":"t","status":"draft"}')
+try:
+    m.main([])
+    print("EXIT=0")            # must not happen
+except SystemExit as e:
+    print("EXIT=" + str(e.code))
+PROBE
+)"
+if grep -q "EXIT=1" <<<"$out" && grep -q "FAILED" <<<"$out"; then
+  echo "   ok: exit 1 and it says so"
+else
+  echo "   !! a failed run would exit 0; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
 echo "-- command hints are runnable, not bare script names"
