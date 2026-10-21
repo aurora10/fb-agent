@@ -20,7 +20,7 @@ def main():
   {img_html}
   <details class="prompt"><summary>image_prompt</summary><pre class="ip">{html.escape(d.get('image_prompt',''))}</pre></details>
   <pre>{html.escape(d['post'])}</pre>
-  <div class="cmd">approve: <code>./approve {num}</code> · redo image: <code>fb_regen_image.py {num} "..."</code></div>
+  <div class="tools">tools (not part of the post): <code>{fb_cmd('approve', num)}</code> · <code>{fb_cmd('regen', num, 'NEW PROMPT')}</code></div>
 </div>""")
     (BASE / "previews/index.html").write_text(f"""<!doctype html><meta charset=utf-8><title>FB previews</title>
 <style>
@@ -30,7 +30,9 @@ body{{font-family:system-ui;background:#f0f2f5;margin:0;padding:20px;display:fle
 img{{width:100%;border-radius:6px}}
 .noimg{{background:#ddd;height:200px;display:flex;align-items:center;justify-content:center;color:#888}}
 pre{{white-space:pre-wrap;font-family:inherit;font-size:14px}}
-.cmd{{font-size:12px;color:#1877f2}}
+/* chrome, clearly apart from the post body it sits under */
+.tools{{border-top:1px solid #e4e6eb;margin-top:10px;padding-top:8px;font-size:11px;color:#8a8d91}}
+.tools code{{background:#f0f2f5;padding:1px 4px;border-radius:3px;color:#1877f2;font-size:11px}}
 .prompt{{font-size:11px;color:#555;margin:6px 0}}
 .prompt .ip{{white-space:pre-wrap;background:#f6f6f8;padding:6px;border-radius:4px;font-size:11px}}
 </style>{''.join(cards)}""")

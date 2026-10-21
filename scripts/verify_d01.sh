@@ -33,7 +33,11 @@ grep -q "1 cards" <<<"$out"
 # No image yet, so the gallery must say so rather than silently showing none
 grep -q "0 with an image" <<<"$out"
 grep -q "no images yet" <<<"$out"
-grep -q "./approve 01" "$T/previews/index.html"
+# the hint must be a runnable, site-aware command, and must be labelled as chrome so it
+# cannot be mistaken for part of the post
+grep -q "./fb root approve 01" "$T/previews/index.html"
+grep -q "not part of the post" "$T/previews/index.html"
+grep -q 'border-top:1px solid #e4e6eb' "$T/previews/index.html"
 # ...and once an image exists, the count and the embedding must both follow
 mkdir -p "$T/images"          # fixture: as if fb_images.py had just run
 : > "$T/images/01.png"
