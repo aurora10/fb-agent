@@ -567,6 +567,141 @@ else
   echo "   !! check-dupes misbehaved; got:"; echo "$out" | sed 's/^/      /'; exit 1
 fi
 
+echo "-- research brief: fresh is used, stale is refused, and the no-facts rule travels"
+out="$(cd "$T" && "$V" - <<'PY' 2>&1
+import datetime, json, pathlib, sys
+sys.path.insert(0, "scripts")
+import fb_llm, fb_content_plan as cp
+
+p = pathlib.Path("data/concerns.json")
+
+def brief(days_ago):
+    stamp = (datetime.datetime.now()
+             - datetime.timedelta(days=days_ago)).isoformat(timespec="seconds")
+    p.write_text(json.dumps({"generated": stamp, "concerns": [
+        {"concern": "Crews blame new materials for callbacks.", "who": "GCs",
+         "why_it_matters": "rework", "links": ["https://www.reddit.com/r/x/a/"]}]}))
+
+p.unlink(missing_ok=True)
+print("ABSENT_IGNORED=" + str(fb_llm.concerns_block() == ""))
+brief(0)
+b = fb_llm.concerns_block()
+print("FRESH_USED=" + str("Crews blame new materials" in b))
+print("NO_FACT_RULE=" + str("Never present a forum claim as a fact" in b))
+# --from-research mode passes include_list=False: the seeds already carry the concerns
+print("LIST_DROPPED=" + str("Crews blame new materials" not in
+                            fb_llm.concerns_block(include_list=False)))
+# A LITERAL age, not CONCERN_TTL_DAYS: an earlier version of this test used the constant
+# it was meant to verify, so raising the TTL to 999 still passed. Six weeks is stale by
+# the rule this feature exists to enforce ("breaking news is worthless three weeks later").
+brief(45)
+print("STALE_IGNORED=" + str(fb_llm.concerns_block() == ""))
+try:
+    cp.research_seeds()
+    print("STALE_REFUSED=False")      # a topic on a 30-day-old worry is the whole failure
+except SystemExit as e:
+    print("STALE_REFUSED=" + str(e.code is not None and e.code != 0))
+brief(0)
+print("SEEDS=" + str(len(cp.research_seeds())))
+p.unlink(missing_ok=True)
+PY
+)"
+for want in ABSENT_IGNORED=True FRESH_USED=True NO_FACT_RULE=True LIST_DROPPED=True \
+            STALE_IGNORED=True STALE_REFUSED=True SEEDS=1; do
+  if ! grep -q "$want" <<<"$out"; then
+    echo "   !! research brief handling wrong, missing [$want]; got:"
+    echo "$out" | sed 's/^/      /'; exit 1
+  fi
+done
+echo "   ok: absent ignored, fresh used, rule travels, stale refused"
+
+echo "-- topic dedupe keeps non-Latin topics (the Russian Page's are Cyrillic)"
+# Regression: [^a-z0-9 ] reduced every Cyrillic topic to "" and the caller drops those,
+# so `topics` was a silent no-op for the Russian site.
+out="$(cd "$T" && "$V" - <<'PY' 2>&1
+import sys
+sys.path.insert(0, "scripts")
+from fb_content_plan import norm
+a, b = norm("Работа в Бельгии без языка"), norm("Работа в Бельгии")
+print("CYRILLIC_KEPT=" + str(bool(a) and a != b))
+print("PUNCT_EQUAL=" + str(norm("Gevel met kleurverschillen") == norm("Gevel met kleurverschillen!")))
+PY
+)"
+if grep -q "CYRILLIC_KEPT=True" <<<"$out" && grep -q "PUNCT_EQUAL=True" <<<"$out"; then
+  echo "   ok: Cyrillic survives normalisation, punctuation still ignored"
+else
+  echo "   !! non-Latin topics would be dropped again; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- research sources: bad regex and duplicate lines are reported, not silent"
+out="$(cd "$T" && "$V" - <<'PY' 2>&1
+import pathlib, sys
+sys.path.insert(0, "scripts")
+import fb_research
+
+p = pathlib.Path("data/reddit.txt")
+p.write_text("Construction\nbelgium | aannem|bouw\nConstruction\n")
+parsed = fb_research.sources()
+print("PARSED=" + str([(s, bool(rx)) for s, rx, _ in parsed]))
+p.write_text("Belgium | aannem(unclosed\n")
+try:
+    fb_research.sources(); print("BADREGEX=False")
+except SystemExit:
+    print("BADREGEX=True")
+p.write_text("# only comments\n")
+try:
+    fb_research.sources(); print("EMPTY=False")
+except SystemExit:
+    print("EMPTY=True")
+p.unlink()
+PY
+)"
+if grep -q "PARSED=\[('Construction', False), ('belgium', True), ('Construction', False)\]" <<<"$out" \
+   && grep -q "appears twice" <<<"$out" \
+   && grep -q "BADREGEX=True" <<<"$out" && grep -q "EMPTY=True" <<<"$out"; then
+  echo "   ok: filter parsed, duplicate flagged, bad regex and empty file explained"
+else
+  echo "   !! source parsing misbehaved; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- research brief language: a pinned language beats the source language"
+# The Russian Page's brief came back Ukrainian because the only sampled post was, and the
+# persona's prose lost that argument. data/language.txt makes it deterministic.
+out="$(cd "$T" && "$V" - <<'PY' 2>&1
+import pathlib, sys
+sys.path.insert(0, "scripts")
+import fb_research
+p = pathlib.Path("data/language.txt")
+p.unlink(missing_ok=True)
+print("UNPINNED_EMPTY=" + str(fb_research.lang_rule() == ""))
+p.write_text("Russian\n")
+print("PINNED_APPLIED=" + str("write in Russian" in fb_research.lang_rule()))
+p.unlink()
+PY
+)"
+if grep -q "UNPINNED_EMPTY=True" <<<"$out" && grep -q "PINNED_APPLIED=True" <<<"$out"; then
+  echo "   ok: optional pin, and it reaches the system prompt"
+else
+  echo "   !! language pin not honoured; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
+echo "-- Reddit: a missing key explains itself (so verify stays fully offline)"
+out="$(cd "$T" && env -u REDDIT_CLIENT_ID -u REDDIT_CLIENT_SECRET "$V" - <<'PY' 2>&1
+import sys
+sys.path.insert(0, "scripts")
+import fb_reddit
+try:
+    fb_reddit.credentials(); print("NOCREDS=False")
+except SystemExit as e:
+    print("NOCREDS=" + str("REDDIT_CLIENT_ID" in str(e.code)))
+PY
+)"
+if grep -q "NOCREDS=True" <<<"$out"; then
+  echo "   ok: names the missing variable instead of a traceback"
+else
+  echo "   !! unclear error without Reddit keys; got:"; echo "$out" | sed 's/^/      /'; exit 1
+fi
+
 echo "-- command hints are runnable, not bare script names"
 out="$(cd "$T" && "$V" - <<'PROBE'
 import pathlib, re

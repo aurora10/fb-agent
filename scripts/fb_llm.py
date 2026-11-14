@@ -15,7 +15,7 @@ Layout:
 Select a site with SITE in the shared .env, or per command:
     SITE=crewnetusa .venv/bin/python scripts/fb_plan.py
 """
-import json, os, re, sys
+import datetime, json, os, re, sys
 from pathlib import Path
 from dotenv import dotenv_values, load_dotenv
 
@@ -201,3 +201,65 @@ def history_block(also_avoid=()):
         parts.append("Al gepland maar nog niet gepubliceerd (ook vermijden):\n"
                      + "\n".join(f"- {t}" for t in also_avoid))
     return "\n\n".join(parts)
+
+
+# ------------------------------------------------------------------ research
+# A research brief is only worth using while it is current. Breaking news is worthless
+# three weeks later, so an expired brief is dropped, not recycled: a stale worry is not
+# a topic, it is a rumour with a date on it. Written by `fb_research.py`.
+
+CONCERNS_FILE = "concerns.json"
+CONCERN_TTL_DAYS = 7        # older than this and the brief is ignored entirely
+MAX_CONCERNS = 8            # bound the prompt; the newest briefs list ~10
+
+
+def concerns():
+    """(concerns, age in days) from data/concerns.json — ([], None) when absent or broken."""
+    raw = data_file(CONCERNS_FILE)
+    if not raw.strip():
+        return [], None
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return [], None
+    items = [c for c in (data.get("concerns") or [])
+             if isinstance(c, dict) and (c.get("concern") or "").strip()]
+    try:
+        age = (datetime.datetime.now()
+               - datetime.datetime.fromisoformat(data.get("generated") or "")).days
+    except (TypeError, ValueError):
+        age = None          # unreadable stamp: trust the content rather than drop it
+    return items, age
+
+
+def concerns_block(max_age_days=CONCERN_TTL_DAYS, include_list=True):
+    """Prompt text carrying current concerns, or '' when there is nothing fresh.
+
+    Community discourse may CHOOSE a topic; it may never SUPPLY a fact. The rule travels
+    with the data so it cannot be lost by forgetting it at a call site.
+
+    include_list=False is for the case where the concerns are already the seeds: repeating
+    them as background only dilutes them, but the no-facts rule must still be sent.
+    """
+    items, age = concerns()
+    if not items or (age is not None and age > max_age_days):
+        return ""
+    lines = []
+    if include_list:
+        lines.append("Community concerns (opinions and worries from forums — "
+                     "SIGNAL, NOT FACTS):")
+        for c in items[:MAX_CONCERNS]:
+            lines.append(f"- {c['concern'].strip()}")
+            for key in ("who", "why_it_matters"):
+                if (c.get(key) or "").strip():
+                    lines.append(f"  {key.replace('_', ' ')}: {c[key].strip()}")
+        lines += ["",
+                  "Use these only as an ANGLE: a topic that could have been written "
+                  "without them is not using them. At least a third of the topics should "
+                  "make one of these worries the SUBJECT of the post, with what we offer "
+                  "as the resolution rather than the topic."]
+    lines += ["",
+              "Never present a forum claim as a fact. If the underlying fact is not in "
+              "the context above, phrase it as a question or as someone's experience — "
+              "never invent a figure, a date, a fine or a rule."]
+    return "\n".join(lines)

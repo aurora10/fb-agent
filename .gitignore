@@ -10,3 +10,7 @@ images/
 previews/
 done/
 past_posts.txt
+
+# research output: dated, regenerated from a live source, not publishing content
+concerns.json
+concerns.txt

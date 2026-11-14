@@ -24,6 +24,7 @@ usage: ./fb <site> <command> [args...]
        ./fb sites
 
 commands:
+  research [opts]       read forum discourse -> data/concerns.txt  (CrewNetUSA only)
   topics [SEED...]      propose post topics from seeds  -> data/topics.txt
   plan [--limit N]      write posts + image prompts     -> drafts/
   gallery               build the draft review gallery  -> previews/index.html
@@ -84,6 +85,7 @@ else
 fi
 
 case "$CMD" in
+  research)    exec "$PY" scripts/fb_research.py "$@" ;;
   topics)      exec "$PY" scripts/fb_content_plan.py "$@" ;;
   plan)        exec "$PY" scripts/fb_plan.py "$@" ;;
   gallery)     exec "$PY" scripts/fb_preview.py "$@" ;;

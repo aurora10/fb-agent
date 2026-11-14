@@ -1,0 +1,18 @@
+# CrewNetUSA — US general contractors (English Page).
+#
+# One source per line:  subreddit   or   subreddit | regex filter
+# Only lines starting with # are comments.
+#
+# Trade subreddits are wholly on-topic, so they carry no filter and are the backbone.
+# General trades are included where the audience (GCs hiring crews) actually posts.
+Construction
+Contractor
+ConstructionManagers
+GeneralContractor
+SkilledTrades
+Concrete
+Roofing
+HVAC
+electricians
+Plumbing
+Carpentry

@@ -132,6 +132,17 @@ sites/
     drafts/ approved/ done/ images/ previews/
 ```
 
+Which steps are actually configured, per Page:
+
+| Page | `data/reddit.txt` | research step |
+| --- | --- | --- |
+| Constructief (`root`) | — | no — seeds only |
+| `rabota` | — | no — seeds only, and Reddit has no audience for that Page anyway |
+| `crewnetusa` | yes | yes — `research` then `topics --from-research` |
+
+That file is the switch. Without it `research` refuses and names the Pages that do have
+sources, so nothing silently runs against a source list nobody chose.
+
 ### The `./fb` shorthand
 
 Rather than typing a site and a script path every time, there is a dispatcher:
@@ -139,6 +150,8 @@ Rather than typing a site and a script path every time, there is a dispatcher:
 ```bash
 ./fb sites                                   # list the sites that exist
 ./fb crewnetusa check
+./fb crewnetusa research                     # what the trade is arguing about
+./fb crewnetusa topics --from-research
 ./fb crewnetusa plan --limit 14
 ./fb crewnetusa gallery
 ./fb crewnetusa images 1 2 3
@@ -280,6 +293,29 @@ First make sure the model knows what you have already published:
 ```bash
 ./fb root past-posts
 ```
+
+### CrewNetUSA only — start from what contractors are arguing about
+
+Topics generated from seeds alone tend to restate your selling point in ten rewordings.
+CrewNetUSA has one extra step before planning that reads what US general contractors are
+actually worrying about this month, so the worry becomes the subject of the post and the
+service becomes the answer.
+
+```bash
+./fb crewnetusa research                  # read r/Construction etc. -> data/concerns.txt
+open sites/crewnetusa/data/concerns.txt   # READ IT: delete what you disagree with
+./fb crewnetusa topics --from-research    # one seed per concern
+```
+
+`research` writes a dated brief of **concerns**, not facts — each with a link to where it
+was said and a `verify before use` line. A brief older than 7 days is ignored rather than
+recycled, because a three-week-old worry is not current. `./fb crewnetusa research --check`
+proves the Reddit credentials still work without spending anything on a model.
+
+**This step is CrewNetUSA only.** Constructief and rabota have no `data/reddit.txt`, and
+`./fb root research` refuses with an explanation instead of guessing at sources. Layout,
+measured per-subreddit yield and the terms to respect:
+[`docs/reddit-research.md`](docs/reddit-research.md).
 
 Then let the agent propose the topics:
 
@@ -590,7 +626,8 @@ write over an existing draft rather than trusting the arithmetic.
 | `fb_api.py cancel POST_ID` | delete a post |
 | `fb_api.py schedule --start DATE [--every N] [--at HH:MM] [--dry-run]` | schedule `approved/` |
 | `fb_plan.py [TOPIC...] [--limit N]` | generate drafts; `--limit N` takes the next N from the queue |
-| `fb_content_plan.py SEED...` | LLM-proposed topic list → `data/topics.txt` |
+| `fb_content_plan.py SEED... [--from-research] [--per-seed N]` | LLM-proposed topic list → `data/topics.txt`; `--from-research` uses the concerns as seeds |
+| `fb_research.py [--days N] [--check]` | **CrewNetUSA only**: read forum discourse → concern brief (`data/concerns.txt`). `--check` verifies the Reddit credentials, no spend |
 | `fb_images.py [NN...]` | generate images (all drafts, or just the numbers given) |
 | `fb_restyle_prompts.py [NN...]` | rewrite draft prompts to scene-only (drops style wording) |
 | `fb_fix_cta.py [NN...] [--dry-run]` | replace an improvised CTA in existing posts with the pinned one |
@@ -615,13 +652,17 @@ write over an existing draft rather than trusting the arithmetic.
 | `data/topics.txt` | topic queue (one per line) — fed by you or `fb_content_plan.py` |
 | `data/past_posts.txt` | published history, newest first — synced by `fb_api.py past-posts` (gitignored) |
 | `data/seeds.txt` | seed themes for `fb_content_plan.py` (one per line, `#` comments). **Vary them** — one narrow seed produces ten posts on that one theme |
+| `data/reddit.txt` | research sources, one per line: `Construction` or `Contractor \| crew\|bid`. One line per subreddit. Only `sites/crewnetusa/` has this, which is what enables `research` there |
+| `data/language.txt` | optional: pins the language the research brief is written in, so a foreign-language source post cannot drag the brief with it. Only the US Page needs one today |
+| `data/concerns.json` / `.txt` | research output: what the audience worries about, dated and sourced (gitignored). The `.txt` is for reading, the `.json` for the planner |
 | `drafts/` → `approved/` → `done/` | post lifecycle |
 | `done/scheduled_posts.json` | local ledger of scheduled post ids |
 | `.env` | keys and tokens (gitignored, chmod 600) |
 
 **Everything generated is gitignored** — `drafts/`, `approved/`, `images/`, `previews/`,
-`done/` and `data/past_posts.txt` are all excluded, so your post copy, published history,
-generated images and tokens stay off GitHub.
+`done/`, `data/past_posts.txt` and the research output (`data/concerns.*`) are all
+excluded, so your post copy, published history, generated images, research briefs and
+tokens stay off GitHub.
 
 The consequence: **a fresh clone has none of those directories, and no post history.** Every
 script creates the directory it needs, so just run Part 1 Step 4 and then the Part 2 steps in
@@ -629,6 +670,11 @@ order. Tracked under `data/` are only `context.txt`, `topics.txt` and `seeds.txt
 
 ## Gotchas
 
+- **Reddit keys are inventory you cannot replace.** Reddit closed self-service app
+  creation in late 2025, so `REDDIT_CLIENT_ID`/`REDDIT_CLIENT_SECRET` in `.env` are
+  the only ones you will get without an approval process. The client is read-only and
+  rate-limited to 1000 requests/10 min; `research` uses about 20 per run. Never
+  reproduce comment text in a post — the brief paraphrases and links for a reason.
 - **`.env` holds a Page token.** Gitignored and chmod 600. Never commit it.
 - **The Page token never expires.** It dies only if you change your Facebook password,
   lose your Page role, or remove the app. On error code `190`, re-run `fb_api.py token`
