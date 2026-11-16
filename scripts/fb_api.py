@@ -311,8 +311,17 @@ def post_id_for(res, tok):
         return res["post_id"]
     if "_" in ident:                      # already a {page}_{post} id
         return ident
-    d = graph(ident, {"fields": "page_story_id", "access_token": tok}, soft=True)
-    return (d or {}).get("page_story_id") or ident
+    # Retry before giving up: this lookup is the only way to learn a photo's post id, and a
+    # single transient failure used to fall through to returning the PHOTO id. That id is a
+    # real object, so nothing raised — `list` then filtered it out as unreadable and the post
+    # silently disappeared from the operator's view while still scheduled on the Page.
+    for _ in range(3):
+        d = graph(ident, {"fields": "page_story_id", "access_token": tok}, soft=True)
+        if (d or {}).get("page_story_id"):
+            return d["page_story_id"]
+    print(f"[!!] could not resolve a post id for {ident} — storing the photo id instead; "
+          f"this post may not show up in `list`.", file=sys.stderr)
+    return ident
 
 
 def cmd_test_post(argv):
@@ -359,7 +368,13 @@ def cmd_list():
     # Scheduled posts are invisible to every listing edge, so we track ids locally and
     # verify each one against the API. (`/{page-id}/feed` would list them, but it needs
     # Page Public Content Access; `/{page-id}/posts` returns only published posts.)
-    rows = [r for r in ledger_load() if r.get("id", "").startswith(f"{pid}_")]
+    #
+    # Rows whose id is not prefixed with this Page must NOT be dropped quietly: that is how
+    # a real scheduled post vanished from this view while still sitting on the Page. Show
+    # them, flagged, so a misfiled id is visible instead of silent.
+    all_rows = ledger_load()
+    rows = [r for r in all_rows if r.get("id", "").startswith(f"{pid}_")]
+    misfiled = [r for r in all_rows if r not in rows]
     print(f"scheduled (tracked locally in {LEDGER.relative_to(BASE)}, verified against the API):")
     if not rows:
         print("  (none)")
@@ -374,6 +389,14 @@ def cmd_list():
         state = "published" if d.get("is_published") else "SCHEDULED"
         text = (d.get("message") or r.get("text") or "").replace("\n", " ")[:50]
         print(f"  {state:9} {when:16} {r['id']}  {text}")
+
+    if misfiled:
+        print(f"\n[!!] {len(misfiled)} ledger row(s) do not belong to this Page "
+              f"({pid}) — they are NOT counted above:")
+        for r in misfiled:
+            print(f"  MISFILED  {r['id']}  {str(r.get('text') or '')[:40]}")
+        print("     These may still be live on the Page. Check them with:  "
+              f"{fb_cmd('preview', r['id'])}")
 
     print(f"\nrecent published (times shown in {post_tz().key if post_tz() else 'your local timezone'}):")
     pub = graph(f"{pid}/posts", {

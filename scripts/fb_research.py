@@ -58,6 +58,9 @@ others get wrong, what burned or surprised them, what they keep asking each othe
 - Ignore moderator announcements, job ads, memes, and self-promotion.
 - Do not invent. If the sample contains no real concerns, return an empty list.
 - Every concern must cite at least one URL that appears in the sample, copied exactly.
+- Aim for 5-10 concerns when the sample supports it. Two or three is an honest answer for a
+  thin sample; across forty posts and two hundred comments it usually means the obvious ones
+  were taken and nobody looked harder.
 - Write in the language this Page publishes in. Name the audience segment in "who".
 
 JSON only:

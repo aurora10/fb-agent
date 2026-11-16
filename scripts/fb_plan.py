@@ -43,7 +43,111 @@ def next_number():
     return max(existing_numbers(), default=0) + 1
 
 
+DRAFT_ASK = """Write a Facebook post about this topic: TOPIC
+
+Also return an image_prompt describing ONLY THE SCENE: which objects, people, materials
+and actions are visible, and the composition. The image_prompt MUST be written in ENGLISH
+and only in ENGLISH — translate any trade terms rather than leaving words in the post's
+language. Do NOT describe style, lighting, colours, camera angle or rendering — the visual
+style comes from a separate fixed style prompt and must not be contradicted. Never use
+'photorealistic', 'cinematic' or '3D render'. No logos or text in frame, no front-facing
+faces.
+
+Return 5 hashtags in the same language as the post, as a list, without the #.
+
+JSON: {"post": "...", "hashtags": ["..."], "image_prompt": "..."}"""
+
+REQUIRED = ("post", "image_prompt", "hashtags")
+
+
+def hashtags_only(cl, post, attempts=2):
+    """Ask for just the tag trail.
+
+    Asking for the post, the scene and the tags in one JSON object is where the tags get
+    dropped: the model spends its budget on prose and returns two of three keys. A lone
+    question about hashtags is answered reliably, and it costs a fraction of a retry.
+    """
+    for _ in range(attempts):
+        got = ask(cl, "You choose hashtags for a social media post. Reply with JSON only.",
+                  f"Post:\n{post}\n\nReturn 5 hashtags in the same language as the post, "
+                  'as a list, without the #.\nJSON: {"hashtags": ["...", "..."]}')
+        tags = [t.strip().lstrip("#") for t in (got.get("hashtags") or [])
+                if isinstance(t, str) and t.strip()]
+        if tags:
+            return tags[:5]
+    return []
+
+
+SCENE_ONLY = """Describe ONLY THE SCENE for an image to accompany this post: which objects,
+people, materials and actions are visible, and the composition. Write in ENGLISH only.
+Do NOT describe style, lighting, colours, camera angle or rendering — a fixed style prompt
+is appended separately. Never write 'photorealistic', 'cinematic' or '3D render'. No logos
+or text in frame, no front-facing faces.
+
+Post:
+POSTTEXT
+
+JSON: {"image_prompt": "..."}"""
+
+
+def image_prompt_only(cl, post, attempts=2):
+    """Ask for just the scene description, for the same reason as the hashtags.
+
+    This was the field that actually blocked batches: five of fourteen topics produced no
+    draft at all because image_prompt came back missing twice in a row, and an earlier
+    batch had ten of fourteen incomplete. Asked on its own it is reliable.
+    """
+    for _ in range(attempts):
+        got = ask(cl, "You write image scene descriptions. Reply with JSON only.",
+                  SCENE_ONLY.replace("POSTTEXT", post))
+        ip = str(got.get("image_prompt") or "").strip()
+        if ip and ip.isascii():
+            return ip
+    print("[..] no English scene prompt after "
+          f"{attempts} attempt(s); leaving image_prompt empty")
+    return ""
+
+
+def draft_payload(cl, system, topic, attempts=2):
+    """Ask for a draft, then fill the two side fields separately if they are missing.
+
+    Originally the whole payload was required up front, and the model kept returning two of
+    three keys — ten of fourteen drafts in one batch came back incomplete, and `images`
+    later died on the KeyError. Only the post is worth retrying a topic over. The scene
+    prompt and the tags are companion fields that the model answers reliably when they are
+    the only thing asked, and a draft with an empty image_prompt is still publishable
+    (which matters when images are being reused rather than rendered).
+    """
+    why = ""
+    for attempt in range(1, attempts + 1):
+        prompt = DRAFT_ASK.replace("TOPIC", topic, 1)
+        if attempt > 1:
+            prompt += ("\n\nIMPORTANT: your previous answer was missing " + why +
+                       ". Return ALL THREE keys as described.")
+        data = ask(cl, system, prompt)
+        if not str(data.get("post") or "").strip():
+            why = "the post itself"
+            print(f"[..] attempt {attempt}: model omitted the post")
+            continue
+        if not str(data.get("image_prompt") or "").strip():
+            data["image_prompt"] = image_prompt_only(cl, data["post"])
+        if not isinstance(data.get("hashtags"), list) or not data["hashtags"]:
+            tags = hashtags_only(cl, data["post"])
+            if tags:
+                data["hashtags"] = tags
+            else:
+                print("[..] no hashtags produced; this post ends without a tag trail")
+        return data
+    print(f"[!!] skipped: no usable post for {topic!r} after {attempts} attempt(s).")
+    return None
+
+
 def plan(topics):
+    """Draft each topic, skipping the ones the model will not fill in. Returns the skips.
+
+    One stubborn topic must not take the other thirteen down with it: a batch is a batch,
+    and a topic that fails twice is a topic to retry later, not a reason to stop.
+    """
     cl = client()
     (BASE / "drafts").mkdir(parents=True, exist_ok=True)
     # The persona file carries the brand, the output language and the tone, so this module
@@ -53,28 +157,18 @@ def plan(topics):
         f"Context: {CTX[:2000]}\n\n"
         + history_block()
     )
-    for i, topic in enumerate(topics, start=next_number()):
-        out = BASE / "drafts" / f"draft_{i:02d}.json"
+    n = next_number()
+    skipped = []
+    for topic in topics:
+        out = BASE / "drafts" / f"draft_{n:02d}.json"
         if out.exists():
             sys.exit(f"error: {out.name} already exists — refusing to overwrite it.\n"
                      f"       this should not happen with max+1 numbering; check drafts/ "
                      f"for a numbering clash")
-        data = ask(cl, system, (
-            f"Write a Facebook post about this topic: {topic}\n\n"
-            "Also return an image_prompt describing ONLY THE SCENE: which objects, "
-            "people, materials and actions are visible, and the composition. The image_prompt "
-            "MUST be written in ENGLISH and only in ENGLISH — translate any trade terms rather "
-            "than leaving words in the post's language. Which objects, "
-            "people, materials and actions are visible, and the composition. Do NOT describe "
-            "style, lighting, colours, camera angle or rendering — the visual style comes from "
-            "a separate fixed style prompt and must not be contradicted. Never use "
-            "'photorealistic', 'cinematic' or '3D render'. No logos or text in frame, no "
-            "front-facing faces.\n\n"
-            "Return 5 hashtags in the same language as the post, as a list, without the #.\n\n"
-            "JSON: {\"post\": \"...\", \"hashtags\": [\"...\"], \"image_prompt\": \"...\"}"
-        ))
-        if "post" not in data:
-            sys.exit(f"error: model returned no 'post' key for topic {topic!r}")
+        data = draft_payload(cl, system, topic)
+        if data is None:
+            skipped.append(topic)
+            continue                      # the number is reused by the next good draft
         # The CTA is fixed (data/cta.txt), not model-written: left to the model it drifted
         # from the Page's own convention. Belt and braces in case the model still appends tags.
         body = strip_tags(data["post"])
@@ -83,6 +177,8 @@ def plan(topics):
         data["status"] = "draft"
         out.write_text(json.dumps(data, ensure_ascii=False, indent=2))
         print(f"[ok] {out.name}: {topic}")
+        n += 1
+    return skipped
 
 
 def queued_topics():
@@ -131,11 +227,18 @@ if __name__ == "__main__":
             time.sleep(8)
 
         taken = queued[:limit] if limit else queued
-        plan(taken)
+        skipped = plan(taken)
 
         # Only shrink the queue after drafting succeeded; a crash mid-run must not lose topics.
-        TOPICS.write_text("".join(t + "\n" for t in queued[len(taken):]))
-        remaining = len(queued) - len(taken)
-        print(f"[ok] data/topics.txt: {remaining} topic(s) left in the queue")
+        # Topics that produced no draft go back to the FRONT, so the retry is the next thing
+        # that happens rather than something buried 86 lines down.
+        TOPICS.write_text("".join(t + "\n" for t in skipped + queued[len(taken):]))
+        made = len(taken) - len(skipped)
+        remaining = len(queued) - len(taken) + len(skipped)
+        print(f"[ok] drafted {made} of {len(taken)}; {remaining} topic(s) left in the queue")
+        if skipped:
+            print(f"[!!] {len(skipped)} topic(s) produced no draft and went back to the queue:")
+            for t in skipped:
+                print(f"     - {t}")
         if remaining:
             print(f"     next batch: {fb_cmd('plan', '--limit', min(BATCH_HINT, remaining))}")

@@ -49,7 +49,7 @@ def main(argv):
         if missing:
             print(f"[..] no draft for: {', '.join(missing)} — skipping")
 
-    todo, skipped = [], 0
+    todo, skipped, no_prompt = [], 0, []
     for f in drafts:
         num = f.stem.split("_")[1]
         if only and num not in only:
@@ -57,7 +57,18 @@ def main(argv):
         if (BASE / "images" / f"{num}.png").exists():
             skipped += 1
             continue
-        todo.append((num, json.loads(f.read_text())["image_prompt"]))
+        # A missing key used to raise KeyError and kill the whole run mid-batch, after
+        # images had already been paid for. Report it and carry on instead.
+        prompt = (json.loads(f.read_text()).get("image_prompt") or "").strip()
+        if not prompt:
+            no_prompt.append(num)
+            continue
+        todo.append((num, prompt))
+
+    if no_prompt:
+        print(f"[!!] no image_prompt in draft(s): {', '.join(no_prompt)} — not rendered.\n"
+              f"     Those posts will publish without an image unless you supply one "
+              f"(see {fb_cmd('regen', no_prompt[0])}).")
 
     if not todo:
         if skipped:
